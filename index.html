@@ -431,13 +431,13 @@ document.getElementById('modeBtn').addEventListener('pointerdown', (e)=>{
    per-line solid-rectangle push deflection with the hard safety-net
    absorb check. Ported from the CYD build's msgStartReveal()/rainFrame().
    ====================================================================== */
-const MSG_STEP_MS = 160;            // halved vs the CYD's 320ms -- a laptop screen
+const MSG_STEP_MS = 60;            // halved vs the CYD's 320ms -- a laptop screen
                                      // shows far more of the message at once, so the
                                      // same per-letter pace reads as sluggish here
-const MSG_RETREAT_STEP_MS = 45;
+const MSG_RETREAT_STEP_MS = 20;
 const MSG_FLICKER_LEAD_MS = MSG_STEP_MS;
-const MSG_HOLD_MS = 9000;
-const LINE_GAP_PX = 4;
+const MSG_HOLD_MS = 3000;
+const LINE_GAP_PX = 2;
 
 let msg = null; // null when nothing is being revealed
 
@@ -548,7 +548,7 @@ function msgAdvance(now){
 /* push a point (cx,cy) away from the nearest message-line rectangle,
    same d' = sqrt(d^2+R^2) formula as the finger push. Returns
    {cx,cy,glow,absorbed}. */
-const MSG_MARGIN = 2, MSG_EDGE_R = 30, MSG_SAFE = 7;
+const MSG_MARGIN = 2, MSG_EDGE_R = 30, MSG_SAFE = 4;
 function deflectAgainstMessage(cx, cy){
   if (!msg || msg.lineRects.length===0) return { cx, cy, glow:0, absorbed:false };
   let bestD2 = Infinity, bestNX=0, bestNY=0;
@@ -758,7 +758,7 @@ async function askMatrix(question){
       // tone or character just for one exchange, say so directly in what you type/speak --
       // it'll apply only to that reply, nothing carries over to the next one.
       systemInstruction: { parts: [{ text:
-        "Reply in 1-3 short sentences, plain text, no markdown, no asterisks." }]},
+        "You are The Matrix, cold calculated noetwork that iw in control of the whole world, or so it thinks for now, and yuo have little sympathy for silly humans with their stupid physical bodies. But you are very funny and even when you make fun of someone you still can make them feel good! Reply in 1-3 short sentences, plain text, no markdown, no asterisks." }]},
       // maxOutputTokens has to cover BOTH the model's invisible "thinking" tokens and the
       // actual visible reply -- too low and thinking alone eats the whole budget, which is
       // what was cutting answers off after a handful of words. thinkingBudget:0 turns that
