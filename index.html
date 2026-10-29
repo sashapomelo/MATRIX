@@ -246,7 +246,9 @@ const ctx = canvas.getContext('2d', { alpha:false });
 let W=0, H=0, DPR=1;
 
 const GW = 14, GH = 20;      // glyph cell -- same role as GW/GH on the CYD build
-const FONT_PX = 17;
+const FONT_PX = 17;          // rain glyph font size
+const MSG_FONT_PX = 13;      // white locked-in message text font size -- independent of the
+                              // rain's own size now; lower this alone to shrink just the text.
 let COLS = 0, ROWS = 0;      // grid dimensions, recomputed on resize
 
 function resize(){
@@ -584,7 +586,7 @@ function deflectAgainstMessage(cx, cy){
 
 function drawMessageOverlay(now){
   if (!msg) return;
-  ctx.font = `700 ${FONT_PX}px 'JetBrains Mono', monospace`;
+  ctx.font = `700 ${MSG_FONT_PX}px 'JetBrains Mono', monospace`;
   ctx.textBaseline = 'top';
   for (let r=0;r<msg.numLines;r++){
     const py = msg.rowPixelY[r];
