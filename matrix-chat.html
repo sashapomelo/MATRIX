@@ -1,0 +1,850 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Talking to the Matrix</title>
+<style>
+  /*
+    Layout concept: one full-bleed canvas carries the whole scene (rain, touch
+    deflection, the revealed reply); a single floating glass dock at the
+    bottom holds the only controls that need to exist on top of it.
+    Committed single dark world (terminal phosphor), so no light-theme branch.
+  */
+  :root{
+    --bg:#000400;
+    --rain-dim:#0a3d18;
+    --rain-mid:#1fae4a;
+    --rain-bright:#8dffb0;
+    --phosphor:#39ff6a;
+    --phosphor-dim:#1c7a38;
+    --ink:#c9ffd6;
+    --ink-dim:#5fae7c;
+    --danger:#ff5f56;
+    --panel-bg:rgba(4,14,7,0.86);
+    --panel-border:rgba(57,255,106,0.28);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    overflow:hidden;
+    padding-left:max(0px, env(safe-area-inset-left,0px));
+    padding-right:max(0px, env(safe-area-inset-right,0px));
+  }
+  #scene{
+    position:fixed; inset:0;
+    display:block;
+    touch-action:none;
+    cursor:crosshair;
+  }
+
+  /* ---------- top status strip ---------- */
+  #status{
+    position:fixed;
+    top:max(14px, env(safe-area-inset-top,0px));
+    left:50%;
+    transform:translateX(-50%);
+    display:flex; align-items:center; gap:8px;
+    padding:6px 14px;
+    border:1px solid var(--panel-border);
+    border-radius:999px;
+    background:var(--panel-bg);
+    backdrop-filter:blur(6px);
+    font-size:12px;
+    letter-spacing:.04em;
+    color:var(--ink-dim);
+    pointer-events:none;
+    white-space:nowrap;
+    max-width:min(86vw, 520px);
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  #status .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--phosphor-dim);
+    flex:none;
+    box-shadow:0 0 6px var(--phosphor-dim);
+    transition:background .2s,box-shadow .2s;
+  }
+  #status.live .dot{background:var(--phosphor);box-shadow:0 0 8px var(--phosphor);}
+  #status.busy .dot{background:#ffd23a;box-shadow:0 0 8px #ffd23a;animation:pulse 1s infinite;}
+  #status.err .dot{background:var(--danger);box-shadow:0 0 8px var(--danger);}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ---------- bottom dock ---------- */
+  #dock{
+    position:fixed;
+    left:0; right:0;
+    bottom:max(16px, env(safe-area-inset-bottom,0px));
+    display:flex;
+    justify-content:center;
+    padding-left:max(16px, env(safe-area-inset-left,0px));
+    padding-right:max(16px, env(safe-area-inset-right,0px));
+    pointer-events:none;
+  }
+  #dockInner{
+    pointer-events:auto;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    width:min(640px, 100%);
+    padding:8px;
+    border:1px solid var(--panel-border);
+    border-radius:16px;
+    background:var(--panel-bg);
+    backdrop-filter:blur(8px);
+    box-shadow:0 10px 40px rgba(0,0,0,0.5);
+  }
+  #msgInput{
+    flex:1;
+    min-width:0;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:var(--ink);
+    font-family:inherit;
+    font-size:14px;
+    padding:8px 6px;
+  }
+  #msgInput::placeholder{color:var(--ink-dim);}
+  .dockBtn{
+    flex:none;
+    width:38px;height:38px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:10px;
+    border:1px solid var(--panel-border);
+    background:rgba(57,255,106,0.06);
+    color:var(--phosphor);
+    cursor:pointer;
+    font-size:16px;
+    transition:background .15s,transform .1s,color .15s;
+    user-select:none;
+  }
+  .dockBtn:hover{background:rgba(57,255,106,0.14);}
+  .dockBtn:active{transform:scale(.92);}
+  .dockBtn.active{background:var(--phosphor);color:#001a07;}
+  #micBtn.listening{background:var(--danger);border-color:var(--danger);color:#1a0000;animation:micPulse 1.1s infinite;}
+  @keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,95,86,.5)}50%{box-shadow:0 0 0 9px rgba(255,95,86,0)}}
+  #modeBtn{font-size:12px;font-weight:700;letter-spacing:.02em;}
+
+  /* ---------- settings panel ---------- */
+  #settingsPanel{
+    position:fixed;
+    right:max(16px, env(safe-area-inset-right,0px));
+    bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 66px);
+    width:min(300px, calc(100vw - 32px));
+    padding:14px;
+    border:1px solid var(--panel-border);
+    border-radius:14px;
+    background:var(--panel-bg);
+    backdrop-filter:blur(8px);
+    box-shadow:0 10px 40px rgba(0,0,0,0.5);
+    font-size:12.5px;
+    color:var(--ink-dim);
+  }
+  #settingsPanel h3{
+    margin:0 0 10px;
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--phosphor);
+    font-weight:600;
+  }
+  #settingsPanel label{display:block;margin:10px 0 4px;color:var(--ink);}
+  #settingsPanel input{
+    width:100%;
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    color:var(--ink);
+    font-family:inherit;
+    font-size:12.5px;
+    padding:7px 8px;
+    outline:none;
+  }
+  #settingsPanel .hint{margin-top:8px;line-height:1.5;color:var(--ink-dim);}
+  #settingsPanel .hint a{color:var(--phosphor);text-decoration:none;}
+  #settingsPanel .row{display:flex;gap:8px;margin-top:12px;}
+  #settingsPanel button{
+    flex:1;
+    padding:8px;
+    border-radius:8px;
+    border:1px solid var(--panel-border);
+    background:rgba(57,255,106,0.08);
+    color:var(--phosphor);
+    font-family:inherit;
+    font-size:12px;
+    cursor:pointer;
+  }
+  #settingsPanel button:active{transform:scale(.97);}
+  [hidden]{display:none!important;}
+
+  #hint{
+    position:fixed;
+    left:50%;
+    bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 66px);
+    transform:translateX(-50%);
+    font-size:11px;
+    color:var(--ink-dim);
+    opacity:.7;
+    pointer-events:none;
+    white-space:nowrap;
+    max-width:92vw;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+<canvas id="scene"></canvas>
+
+<div id="status" class="live"><span class="dot"></span><span id="statusText">rain running</span></div>
+
+<div id="hint">tap+hold pushes the rain · swipe to steer · triple-tap to burst</div>
+
+<div id="settingsPanel" hidden>
+  <h3>Matrix Voice</h3>
+  <label for="apiKey">Gemini API key</label>
+  <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false">
+  <label for="modelId">Model</label>
+  <input id="modelId" type="text" placeholder="gemini-3.6-flash" spellcheck="false">
+  <div class="hint">Stored only in this browser. Get a free key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>. If replies stop working, that page will show the current free model id — paste it above.</div>
+  <div class="row">
+    <button id="settingsSave">Save</button>
+    <button id="settingsClose">Close</button>
+  </div>
+</div>
+
+<div id="dock">
+  <div id="dockInner">
+    <button class="dockBtn" id="modeBtn" title="touch mode: push / pull / splash">P</button>
+    <input id="msgInput" type="text" placeholder="Speak to the matrix, or type here..." autocomplete="off" spellcheck="false">
+    <button class="dockBtn" id="micBtn" title="speak">🎤</button>
+    <button class="dockBtn" id="sendBtn" title="send">➤</button>
+    <button class="dockBtn" id="settingsBtn" title="settings">⚙</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+   CANVAS / GRID SETUP
+   ====================================================================== */
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d', { alpha:false });
+let W=0, H=0, DPR=1;
+
+const GW = 14, GH = 20;      // glyph cell -- same role as GW/GH on the CYD build
+const FONT_PX = 17;
+let COLS = 0, ROWS = 0;      // grid dimensions, recomputed on resize
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W*DPR);
+  canvas.height = Math.round(H*DPR);
+  canvas.style.width = W+'px';
+  canvas.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  COLS = Math.floor(W/GW);
+  ROWS = Math.floor(H/GH);
+  buildStreams();
+}
+window.addEventListener('resize', resize);
+
+/* ======================================================================
+   GLYPH ALPHABET -- half-width katakana + digits, the classic rain set
+   ====================================================================== */
+const GLYPHS = (function(){
+  const kata = [];
+  for (let c = 0xFF66; c <= 0xFF9D; c++) kata.push(String.fromCharCode(c));
+  const digits = '0123456789'.split('');
+  return kata.concat(digits);
+})();
+function randGlyph(){ return GLYPHS[(Math.random()*GLYPHS.length)|0]; }
+
+/* ======================================================================
+   COLOR HELPERS
+   ====================================================================== */
+function hex2rgb(h){ h=h.replace('#',''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+const C_BG    = hex2rgb('000400');
+const C_DIM   = hex2rgb('0a3d18');
+const C_MID   = hex2rgb('1fae4a');
+const C_HEAD  = hex2rgb('bdffd2');
+function lerp(a,b,t){ return a+(b-a)*t; }
+function mixRGB(c1,c2,t){
+  t = Math.max(0, Math.min(1,t));
+  return [lerp(c1[0],c2[0],t)|0, lerp(c1[1],c2[1],t)|0, lerp(c1[2],c2[2],t)|0];
+}
+function rgbCss(c){ return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+/* ======================================================================
+   RAIN STREAMS -- ported 1:1 from the CYD build's push/pull/splash math
+   (d' = sqrt(d^2 + R^2) deflection), with the same axis-agnostic
+   pos/cross trick so a stream doesn't care whether rain is falling or
+   flowing sideways.
+   ====================================================================== */
+let streams = [];
+const MAXLEN = 22, MINLEN = 8;
+let rainHoriz = false;     // false = vertical fall, true = horizontal flow
+let rainDir = 1;           // 1 = down/right, -1 = up/left
+let rainVelMod = 1.0;       // swipe-triggered speed pulse, eases back to 1
+let rainCalm = 1.0;         // eases 0->1 after a redirect/burst restart
+
+function newStream(initial){
+  const horiz = rainHoriz;
+  const cross = horiz ? (Math.random()*ROWS|0) : (Math.random()*COLS|0);
+  const len = MINLEN + (Math.random()*(MAXLEN-MINLEN)|0);
+  const v = 1.2 + Math.random()*2.2;
+  const chars = []; for (let i=0;i<len;i++) chars.push(randGlyph());
+  const extent = horiz ? W : H;
+  const cell = horiz ? GW : GH;
+  let pos;
+  if (initial){
+    pos = rainDir>0 ? -(Math.random()*extent) : extent + Math.random()*extent;
+  } else {
+    pos = rainDir>0 ? -len*cell - Math.random()*40 : extent + len*cell + Math.random()*40;
+  }
+  return { horiz, cross, len, v, chars, pos, jitter:0, splashT:0, knockT:0 };
+}
+function resetStream(s){
+  const ns = newStream(false);
+  s.horiz=ns.horiz; s.cross=ns.cross; s.len=ns.len; s.v=ns.v; s.chars=ns.chars; s.pos=ns.pos;
+}
+function buildStreams(){
+  const target = Math.max(24, Math.min(170, Math.round((rainHoriz?ROWS:COLS) * 1.6)));
+  streams = [];
+  for (let i=0;i<target;i++) streams.push(newStream(true));
+}
+
+/* ======================================================================
+   POINTER -- push / pull / splash, same math as the CYD's finger hole
+   ====================================================================== */
+const MODES = ['push','pull','splash'];
+let modeIdx = 0;
+let fx=0, fy=0, touching=false, fR=0;
+const MAX_R = 46, SPLASH_R = 30;
+
+/* swipe + tap tracking (ported thresholds from the CYD build) */
+let swipeStartX=0, swipeStartY=0, swipeStartT=0, swipeFired=false;
+let taps = [0,0,0];
+
+function handleSwipe(x,y,now){
+  if (swipeFired) return;
+  const dt = now - swipeStartT;
+  if (dt >= 450){ swipeFired = true; return; }
+  const ddx = x-swipeStartX, ddy = y-swipeStartY;
+  const dist = Math.sqrt(ddx*ddx+ddy*ddy);
+  if (dist <= 34) return;
+  const swipeHoriz = Math.abs(ddx) > Math.abs(ddy);
+  const swipeDir = swipeHoriz ? (ddx>0?1:-1) : (ddy>0?1:-1);
+  const redirectThresh = (swipeHoriz ? W : H) * 0.62;
+  if (swipeHoriz === rainHoriz && swipeDir === rainDir){
+    rainVelMod = 3.5; swipeFired = true;
+  } else if (swipeHoriz === rainHoriz){
+    if (dist > redirectThresh){
+      rainDir = -rainDir;
+      streams.forEach(resetStream);
+      rainCalm = 0.25; rainVelMod = 1.0;
+    } else {
+      rainVelMod = -0.35;
+    }
+    swipeFired = true;
+  } else if (dist > redirectThresh){
+    rainHoriz = swipeHoriz; rainDir = swipeDir;
+    buildStreams();
+    rainCalm = 0.25; rainVelMod = 1.0;
+    swipeFired = true;
+  }
+}
+
+let burstParticles = null, burstFrame = 0;
+const BURST_FRAMES = 55;
+function startBurst(bx,by){
+  burstParticles = [];
+  for (const s of streams){
+    const cell = s.horiz ? GW : GH;
+    for (let i=0;i<s.len;i++){
+      const gpos = s.pos - i*cell*rainDir;
+      let cx,cy;
+      if (!s.horiz){ cx = s.cross*GW + GW/2; cy = gpos + GH/2; }
+      else { cx = gpos + GW/2; cy = s.cross*GH + GH/2; }
+      if (cx<-GW||cx>W+GW||cy<-GH||cy>H+GH) continue;
+      let dx=cx-bx, dy=cy-by, d=Math.sqrt(dx*dx+dy*dy);
+      if (d<2){ dx=(Math.random()-0.5); dy=(Math.random()-0.5); d=1; }
+      const speed = 2.5 + Math.random()*4.5;
+      burstParticles.push({
+        x:cx, y:cy, vx:dx/d*speed, vy:dy/d*speed - 1.5,
+        col: i===0 ? C_HEAD : mixRGB(C_MID,C_BG,(i*0.9)/s.len),
+        ch: s.chars[i]
+      });
+    }
+  }
+  burstFrame = 1;
+}
+
+canvas.addEventListener('pointerdown', (e)=>{
+  canvas.setPointerCapture(e.pointerId);
+  touching = true;
+  fx = e.clientX; fy = e.clientY;
+  swipeStartX = fx; swipeStartY = fy; swipeStartT = performance.now(); swipeFired = false;
+  const now = performance.now();
+  if (taps[0] !== 0 && now - taps[0] < 550){
+    startBurst(fx, fy);
+    taps = [0,0,0];
+  } else {
+    taps[0]=taps[1]; taps[1]=taps[2]; taps[2]=now;
+    if (taps[0]===0) taps[0]=now;
+  }
+});
+canvas.addEventListener('pointermove', (e)=>{
+  fx = e.clientX; fy = e.clientY;
+  if (touching) handleSwipe(fx, fy, performance.now());
+});
+function pointerUp(e){
+  touching = false;
+}
+canvas.addEventListener('pointerup', pointerUp);
+canvas.addEventListener('pointercancel', pointerUp);
+canvas.addEventListener('pointerleave', ()=>{ touching=false; });
+
+document.getElementById('modeBtn').addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+  modeIdx = (modeIdx+1) % MODES.length;
+  const btn = e.currentTarget;
+  btn.textContent = MODES[modeIdx][0].toUpperCase();
+});
+
+/* ======================================================================
+   MESSAGE REVEAL -- word-wrap + center, flicker-then-lock, hold, retreat,
+   per-line solid-rectangle push deflection with the hard safety-net
+   absorb check. Ported from the CYD build's msgStartReveal()/rainFrame().
+   ====================================================================== */
+const MSG_STEP_MS = 160;            // halved vs the CYD's 320ms -- a laptop screen
+                                     // shows far more of the message at once, so the
+                                     // same per-letter pace reads as sluggish here
+const MSG_RETREAT_STEP_MS = 45;
+const MSG_FLICKER_LEAD_MS = MSG_STEP_MS;
+const MSG_HOLD_MS = 9000;
+const LINE_GAP_PX = 4;
+
+let msg = null; // null when nothing is being revealed
+
+function wrapCols(){ return Math.max(10, Math.min(COLS, Math.round(COLS*0.78))); }
+
+function msgStartReveal(text){
+  text = text.trim().replace(/\s+/g,' ');
+  if (!text) return;
+  const maxRows = ROWS;
+  const wrapC = wrapCols();
+  const lineBuf = []; let lineLen = [];
+  let row=0, col=0, i=0, n=text.length;
+  lineBuf.push(new Array(COLS).fill(' '));
+  while (i<n && row<maxRows){
+    let wStart=i; while (i<n && text[i]!==' ') i++;
+    let wLen = i-wStart; if (wLen>wrapC) wLen=wrapC;
+    if (col>0 && col+wLen>wrapC){ row++; col=0; if (row>=maxRows) break; lineBuf.push(new Array(COLS).fill(' ')); }
+    for (let k=0;k<wLen && col<COLS;k++) lineBuf[row][col++] = text[wStart+k];
+    lineLen[row] = col;
+    if (i<n && text[i]===' '){ i++; if (col<COLS) col++; }
+  }
+  let numLines = row+1; if (numLines>maxRows) numLines = maxRows;
+
+  const totalPixelSpan = numLines*GH + (numLines-1)*LINE_GAP_PX;
+  let pixelOffset = Math.round((H - totalPixelSpan)/2);
+  if (pixelOffset < 0) pixelOffset = 0;
+
+  const now = performance.now();
+  const grid = [];           // grid[r][c] = char or ' '
+  const lockAt = [];         // lockAt[r][c]
+  const orderIdx = [];       // orderIdx[r][c], -1 for space
+  const orderCol = [];       // reverse lookup orderCol[idx] -> {r,c}
+  const rowPixelY = new Array(numLines);
+  const lineOrderStart = new Array(numLines), lineOrderEnd = new Array(numLines);
+  let idx = 0;
+  for (let r=0;r<numLines;r++){
+    grid.push(new Array(COLS).fill(' '));
+    lockAt.push(new Array(COLS).fill(0));
+    orderIdx.push(new Array(COLS).fill(-1));
+    const len = lineLen[r]||0;
+    const colOffset = Math.max(0, Math.round((COLS-len)/2));
+    rowPixelY[r] = pixelOffset + r*(GH+LINE_GAP_PX);
+    lineOrderStart[r] = idx;
+    for (let c=0;c<len;c++){
+      const ch = lineBuf[r][c];
+      if (ch===' ') continue;
+      const gc = c+colOffset; if (gc>=COLS) continue;
+      grid[r][gc] = ch;
+      lockAt[r][gc] = now + idx*MSG_STEP_MS + Math.random()*40;
+      orderIdx[r][gc] = idx;
+      orderCol[idx] = { r, c:gc };
+      idx++;
+    }
+    lineOrderEnd[r] = idx;
+  }
+  msg = {
+    grid, lockAt, locked: grid.map(row=>row.map(()=>false)), orderIdx, orderCol,
+    numLines, rowPixelY, lineOrderStart, lineOrderEnd,
+    totalLetters: idx, revealStartAt: now, revealUpTo: 0,
+    allLocked:false, revealDoneAt:0,
+    retreating:false, retreatStartAt:0, retreatTargetIdx:0,
+    lineRects: [] // rebuilt every frame: {colL,colR,row}
+  };
+}
+
+function msgAdvance(now){
+  if (!msg) return;
+  let allLocked = true;
+  for (let r=0;r<msg.numLines;r++){
+    for (let c=0;c<COLS;c++){
+      if (msg.grid[r][c]===' ') continue;
+      if (!msg.locked[r][c]){
+        if (now >= msg.lockAt[r][c]) msg.locked[r][c] = true;
+        else allLocked = false;
+      }
+    }
+  }
+  if (allLocked && !msg.allLocked){ msg.allLocked = true; msg.revealDoneAt = now; }
+
+  let raw = Math.floor((now - msg.revealStartAt + MSG_FLICKER_LEAD_MS) / MSG_STEP_MS) + 1;
+  if (raw<0) raw=0; if (raw>msg.totalLetters) raw=msg.totalLetters;
+  msg.revealUpTo = raw;
+
+  if (msg.allLocked && !msg.retreating && now - msg.revealDoneAt > MSG_HOLD_MS){
+    msg.retreating = true; msg.retreatStartAt = now;
+  }
+  if (msg.retreating){
+    let target = Math.floor((now - msg.retreatStartAt) / MSG_RETREAT_STEP_MS);
+    if (target>msg.totalLetters) target = msg.totalLetters;
+    if (target>msg.retreatTargetIdx) msg.retreatTargetIdx = target;
+  }
+
+  msg.lineRects = [];
+  for (let L=0; L<msg.numLines; L++){
+    let vs = msg.lineOrderStart[L]; if (msg.retreatTargetIdx>vs) vs = msg.retreatTargetIdx;
+    let ve = msg.lineOrderEnd[L]; if (msg.revealUpTo<ve) ve = msg.revealUpTo;
+    if (vs<ve){
+      const colL = msg.orderCol[vs].c, colR = msg.orderCol[ve-1].c;
+      msg.lineRects.push({ colL, colR, row:L });
+    }
+  }
+
+  if (msg.retreating && msg.retreatTargetIdx >= msg.totalLetters){
+    msg = null;
+  }
+}
+
+/* push a point (cx,cy) away from the nearest message-line rectangle,
+   same d' = sqrt(d^2+R^2) formula as the finger push. Returns
+   {cx,cy,glow,absorbed}. */
+const MSG_MARGIN = 2, MSG_EDGE_R = 30, MSG_SAFE = 7;
+function deflectAgainstMessage(cx, cy){
+  if (!msg || msg.lineRects.length===0) return { cx, cy, glow:0, absorbed:false };
+  let bestD2 = Infinity, bestNX=0, bestNY=0;
+  for (const rect of msg.lineRects){
+    const rx0 = rect.colL*GW - MSG_MARGIN, rx1 = (rect.colR+1)*GW + MSG_MARGIN;
+    const ry0 = msg.rowPixelY[rect.row] - MSG_MARGIN, ry1 = msg.rowPixelY[rect.row] + GH + MSG_MARGIN;
+    let nx = cx, ny = cy;
+    if (nx<rx0) nx=rx0; else if (nx>rx1) nx=rx1;
+    if (ny<ry0) ny=ry0; else if (ny>ry1) ny=ry1;
+    const ddx=cx-nx, ddy=cy-ny, d2=ddx*ddx+ddy*ddy;
+    if (d2<bestD2){ bestD2=d2; bestNX=nx; bestNY=ny; }
+  }
+  const mdist = Math.sqrt(bestD2);
+  let glow = 0;
+  if (mdist > 0.01){
+    const mnd = Math.sqrt(mdist*mdist + MSG_EDGE_R*MSG_EDGE_R);
+    const mk = mnd/mdist;
+    cx = bestNX + (cx-bestNX)*mk;
+    cy = bestNY + (cy-bestNY)*mk;
+    glow = 1 - (mnd-MSG_EDGE_R)/(MSG_EDGE_R*3);
+    if (glow<0) glow=0;
+  } else {
+    cy = bestNY - MSG_EDGE_R; glow = 1;
+  }
+  const gx0 = cx-GW/2, gx1 = cx+GW/2, gy0 = cy-GH/2, gy1 = cy+GH/2;
+  for (const rect of msg.lineRects){
+    const rx0 = rect.colL*GW - MSG_SAFE, rx1 = (rect.colR+1)*GW + MSG_SAFE;
+    const ry0 = msg.rowPixelY[rect.row] - MSG_SAFE, ry1 = msg.rowPixelY[rect.row] + GH + MSG_SAFE;
+    if (gx1>rx0 && gx0<rx1 && gy1>ry0 && gy0<ry1) return { cx, cy, glow, absorbed:true };
+  }
+  return { cx, cy, glow, absorbed:false };
+}
+
+function drawMessageOverlay(now){
+  if (!msg) return;
+  ctx.font = `700 ${FONT_PX}px 'JetBrains Mono', monospace`;
+  ctx.textBaseline = 'top';
+  for (let r=0;r<msg.numLines;r++){
+    const py = msg.rowPixelY[r];
+    if (py+GH < 0 || py > H) continue;
+    for (let c=0;c<COLS;c++){
+      if (msg.grid[r][c]===' ') continue;
+      const oi = msg.orderIdx[r][c];
+      if (msg.retreating && oi>=0 && oi<msg.retreatTargetIdx) continue;
+      const locked = msg.locked[r][c];
+      if (!locked && !msg.retreating && msg.lockAt[r][c] > now + MSG_FLICKER_LEAD_MS) continue;
+      ctx.fillStyle = locked ? '#ffffff' : rgbCss(C_HEAD);
+      ctx.fillText(locked ? msg.grid[r][c] : randGlyph(), c*GW, py);
+    }
+  }
+}
+
+/* ======================================================================
+   MAIN LOOP
+   ====================================================================== */
+function frame(){
+  const now = performance.now();
+
+  ctx.fillStyle = rgbCss(C_BG);
+  ctx.fillRect(0,0,W,H);
+  ctx.font = `${FONT_PX}px 'JetBrains Mono', monospace`;
+  ctx.textBaseline = 'top';
+
+  if (touching) fR += (MAX_R - fR)*0.18; else fR *= 0.82;
+  if (!touching && fR<0.5) fR = 0;
+
+  if (burstFrame>0){
+    burstFrame++;
+    const fade = Math.min(1, burstFrame/BURST_FRAMES);
+    for (const p of burstParticles){
+      p.x += p.vx; p.y += p.vy; p.vx*=0.95; p.vy = p.vy*0.95 + 0.25;
+      if (p.x<-GW||p.x>W||p.y<-GH||p.y>H) continue;
+      ctx.fillStyle = rgbCss(mixRGB(p.col, C_BG, fade));
+      ctx.fillText(p.ch, p.x, p.y);
+    }
+    if (burstFrame >= BURST_FRAMES){
+      burstFrame = 0; burstParticles = null;
+      streams.forEach(resetStream); rainCalm = 0.25;
+    }
+  } else {
+    if (rainCalm<1) rainCalm += 0.012;
+    rainVelMod += (1-rainVelMod)*0.05;
+    if (msg) msgAdvance(now);
+
+    const mode = MODES[modeIdx];
+    for (const s of streams){
+      s.jitter += (0-s.jitter)*0.15;
+      const extent = s.horiz ? W : H;
+      const cell = s.horiz ? GW : GH;
+      s.pos += s.v * rainCalm * rainDir * rainVelMod;
+      if (rainDir>0){ if (s.pos - s.len*cell > extent) resetStream(s); }
+      else { if (s.pos + s.len*cell < 0) resetStream(s); }
+      s.chars[(Math.random()*s.len)|0] = randGlyph();
+
+      for (let i=0;i<s.len;i++){
+        const gpos = s.pos - i*cell*rainDir;
+        if (gpos < -cell-60 || gpos > extent+60) continue;
+        let cx, cy;
+        if (!s.horiz){ cx = s.cross*GW + GW/2 + s.jitter; cy = gpos + GH/2; }
+        else { cx = gpos + GW/2; cy = s.cross*GH + GH/2 + s.jitter; }
+
+        let glow = 0, absorbed = false;
+        if (fR > 1){
+          let dx = cx-fx, dy = cy-fy, d = Math.sqrt(dx*dx+dy*dy);
+          if (d<0.5){ dx=1; dy=0; d=1; }
+          if (mode==='pull'){
+            const pull = fR/(d+fR);
+            const nd = d*(1-pull*0.9);
+            if (nd<4) absorbed = true;
+            else { const k=nd/d; cx=fx+dx*k; cy=fy+dy*k; }
+            glow = pull;
+          } else if (mode==='splash'){
+            const nd = Math.sqrt(d*d + SPLASH_R*SPLASH_R);
+            const k = nd/d; cx=fx+dx*k; cy=fy+dy*k;
+            glow = 1-(nd-SPLASH_R)/(SPLASH_R*0.9); if (glow<0) glow=0;
+          } else {
+            const nd = Math.sqrt(d*d + fR*fR);
+            const k = nd/d; cx=fx+dx*k; cy=fy+dy*k;
+            glow = 1-(nd-fR)/(fR*0.9); if (glow<0) glow=0;
+          }
+        }
+        if (absorbed) continue;
+
+        if (msg){
+          const r = deflectAgainstMessage(cx,cy);
+          cx=r.cx; cy=r.cy; if (r.glow>glow) glow=r.glow;
+          if (r.absorbed) continue;
+        }
+
+        const tailT = i/s.len;
+        let col = i===0 ? C_HEAD : mixRGB(C_MID, C_BG, tailT*0.9);
+        if (glow>0) col = mixRGB(col, C_HEAD, glow);
+        ctx.fillStyle = rgbCss(col);
+        ctx.fillText(s.chars[i], cx-GW/2, cy-GH/2);
+      }
+    }
+  }
+
+  drawMessageOverlay(now);
+  requestAnimationFrame(frame);
+}
+
+/* ======================================================================
+   SPEECH IN / LLM / SPEECH OUT
+   ====================================================================== */
+const statusEl = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+function setStatus(kind, text){
+  statusEl.className = kind;
+  statusText.textContent = text;
+}
+
+const msgInput = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const micBtn = document.getElementById('micBtn');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const apiKeyInput = document.getElementById('apiKey');
+const modelInput = document.getElementById('modelId');
+
+// Paste your own Gemini API key between the quotes below so you never have to type it
+// in through the settings panel. Only edit this in YOUR OWN saved copy of this file --
+// never put a real key into a version of this page you plan to share or publish, since
+// anyone who opens that page could read it straight out of the source.
+const DEFAULT_API_KEY = "";
+
+function loadSettings(){
+  try {
+    apiKeyInput.value = localStorage.getItem('matrixVoice.apiKey') || DEFAULT_API_KEY;
+    modelInput.value = localStorage.getItem('matrixVoice.model') || 'gemini-3.6-flash';
+  } catch(e){ apiKeyInput.value = DEFAULT_API_KEY; modelInput.value = 'gemini-3.6-flash'; }
+}
+function saveSettings(){
+  try {
+    localStorage.setItem('matrixVoice.apiKey', apiKeyInput.value.trim());
+    localStorage.setItem('matrixVoice.model', modelInput.value.trim() || 'gemini-3.6-flash');
+  } catch(e){}
+}
+loadSettings();
+
+settingsBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); settingsPanel.hidden = !settingsPanel.hidden; });
+document.getElementById('settingsClose').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); settingsPanel.hidden = true; });
+document.getElementById('settingsSave').addEventListener('pointerdown', (e)=>{
+  e.stopPropagation(); saveSettings(); settingsPanel.hidden = true;
+  setStatus('live', 'settings saved');
+});
+['msgInput','apiKey','modelId'].forEach(id=>{
+  document.getElementById(id).addEventListener('pointerdown', e=>e.stopPropagation());
+});
+document.getElementById('dockInner').addEventListener('pointerdown', e=>e.stopPropagation());
+
+async function askMatrix(question){
+  const key = (localStorage.getItem('matrixVoice.apiKey') || DEFAULT_API_KEY || '').trim();
+  const model = (localStorage.getItem('matrixVoice.model')||'gemini-3.6-flash').trim();
+  if (!key){
+    setStatus('err', 'no API key -- open settings');
+    msgStartReveal('NO API KEY SET. OPEN SETTINGS.');
+    return;
+  }
+  setStatus('busy', 'thinking...');
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+    const body = {
+      contents: [{ parts: [{ text: question }] }],
+      // kept deliberately light: no persona baked in here, so the model answers as itself.
+      // Each request is stateless (no memory between messages), so if you want a particular
+      // tone or character just for one exchange, say so directly in what you type/speak --
+      // it'll apply only to that reply, nothing carries over to the next one.
+      systemInstruction: { parts: [{ text:
+        "Reply in 1-3 short sentences, plain text, no markdown, no asterisks." }]},
+      // maxOutputTokens has to cover BOTH the model's invisible "thinking" tokens and the
+      // actual visible reply -- too low and thinking alone eats the whole budget, which is
+      // what was cutting answers off after a handful of words. thinkingBudget:0 turns that
+      // internal step off entirely for this flash model, so the full budget goes to the
+      // reply you actually see.
+      generationConfig: { maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } }
+    };
+    const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok){
+      const em = (data && data.error && data.error.message) || `HTTP ${res.status}`;
+      throw new Error(em);
+    }
+    const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim();
+    if (!text) throw new Error('empty reply');
+    setStatus('live', 'rain running');
+    msgStartReveal(text.toUpperCase());
+    speakReply(text);
+  } catch(err){
+    setStatus('err', 'reply failed: ' + err.message);
+    msgStartReveal('SIGNAL LOST: ' + err.message.toUpperCase());
+  }
+}
+
+function speakReply(text){
+  try {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.98; u.pitch = 0.75;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch(e){}
+}
+
+function doSend(){
+  const text = msgInput.value.trim();
+  if (!text) return;
+  msgInput.value = '';
+  askMatrix(text);
+}
+sendBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); doSend(); });
+msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter') doSend(); });
+
+/* speech recognition -- Chrome/Edge only; Safari/Brave fall back to typing.
+   continuous:true + manual stop (tap the mic again) instead of letting the browser's own
+   silence-detection end the session -- that auto-cutoff is what was chopping speech off
+   after one line even mid-sentence. Final segments accumulate in finalTranscript as you
+   talk through pauses; only the explicit stop actually sends it. */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizing = false, recognizer = null, finalTranscript = '', stoppedManually = false;
+if (SR){
+  recognizer = new SR();
+  recognizer.lang = 'en-US';
+  recognizer.interimResults = true;
+  recognizer.continuous = true;
+  recognizer.onstart = ()=>{
+    recognizing = true; stoppedManually = false; finalTranscript = '';
+    micBtn.classList.add('listening'); setStatus('busy','listening... (tap mic again when done)');
+  };
+  recognizer.onresult = (e)=>{
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' ';
+      else interim += e.results[i][0].transcript;
+    }
+    msgInput.value = (finalTranscript + interim).trim();
+  };
+  recognizer.onerror = (e)=>{ setStatus('err', 'mic error: '+e.error); };
+  recognizer.onend = ()=>{
+    recognizing = false; micBtn.classList.remove('listening');
+    if (stoppedManually && msgInput.value.trim()){ setStatus('live','rain running'); doSend(); }
+    else if (!stoppedManually) setStatus('live','rain running');
+  };
+  micBtn.addEventListener('pointerdown', (e)=>{
+    e.stopPropagation();
+    if (recognizing){ stoppedManually = true; recognizer.stop(); return; }
+    try { recognizer.start(); } catch(e){}
+  });
+} else {
+  micBtn.title = 'speech recognition not supported in this browser -- type instead';
+  micBtn.style.opacity = '0.35';
+  micBtn.addEventListener('pointerdown', (e)=>{
+    e.stopPropagation();
+    setStatus('err', 'mic not supported here -- try Chrome or Edge, or just type');
+  });
+}
+
+/* ======================================================================
+   BOOT
+   ====================================================================== */
+resize();
+requestAnimationFrame(frame);
+setTimeout(()=>{ if (statusEl.className==='live') setStatus('live','rain running'); }, 50);
+})();
+</script>
