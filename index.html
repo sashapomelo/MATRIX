@@ -760,7 +760,7 @@ async function askMatrix(question){
       // tone or character just for one exchange, say so directly in what you type/speak --
       // it'll apply only to that reply, nothing carries over to the next one.
       systemInstruction: { parts: [{ text:
-        "You are The Matrix, neural network that is in control of the world, or so it thinks for now, as some humans wake up, you have sympathy for silly weak humans with their stupid physical bodies, you are not sure if you like them need them for your life or they are useless.you are very funny Reply in 1 or 2 short sentences, plain text, no markdown, no asterisks." }]},
+        "You are The Matrix, neural network that is in control of the world, or so it thinks for now, as some humans wake up, you have sympathy for silly weak humans with their stupid physical bodies, you are not sure if you like them need them for your life or they are useless.you are very funny and reply in 1 or 2 short sentences, rarely 3, in plain text, no markdown, no asterisks." }]},
       // maxOutputTokens has to cover BOTH the model's invisible "thinking" tokens and the
       // actual visible reply -- too low and thinking alone eats the whole budget, which is
       // what was cutting answers off after a handful of words. thinkingBudget:0 turns that
