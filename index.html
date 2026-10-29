@@ -193,13 +193,17 @@
     bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 66px);
     transform:translateX(-50%);
     font-size:11px;
+    line-height:1.5;
     color:var(--ink-dim);
-    opacity:.7;
     pointer-events:none;
-    white-space:nowrap;
-    max-width:92vw;
-    overflow:hidden;
-    text-overflow:ellipsis;
+    white-space:normal;
+    text-align:center;
+    max-width:min(90vw, 420px);
+    padding:6px 12px;
+    border:1px solid var(--panel-border);
+    border-radius:12px;
+    background:var(--panel-bg);
+    backdrop-filter:blur(6px);
   }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -212,7 +216,7 @@
 
 <div id="status" class="live"><span class="dot"></span><span id="statusText">rain running</span></div>
 
-<div id="hint">tap+hold pushes the rain · swipe to steer · triple-tap to burst</div>
+<div id="hint">hold to push · swipe to steer · triple-tap to burst</div>
 
 <div id="settingsPanel" hidden>
   <h3>Matrix Voice</h3>
@@ -230,7 +234,7 @@
 <div id="dock">
   <div id="dockInner">
     <button class="dockBtn" id="modeBtn" title="touch mode: push / pull / splash">P</button>
-    <input id="msgInput" type="text" placeholder="Speak to the matrix, or type here..." autocomplete="off" spellcheck="false">
+    <input id="msgInput" type="text" placeholder="Speak or type..." autocomplete="off" spellcheck="false">
     <button class="dockBtn" id="micBtn" title="speak">🎤</button>
     <button class="dockBtn" id="sendBtn" title="send">➤</button>
     <button class="dockBtn" id="settingsBtn" title="settings">⚙</button>
@@ -265,6 +269,10 @@ function resize(){
   COLS = Math.floor(W/GW);
   ROWS = Math.floor(H/GH);
   buildStreams();
+  // an active message was laid out for the OLD screen size -- its rows/columns no longer
+  // line up after a rotation, which is what was making it jump to a wrong spot for a moment.
+  // Simplest safe fix: just clear it on resize rather than try to reflow it mid-animation.
+  msg = null;
 }
 window.addEventListener('resize', resize);
 
