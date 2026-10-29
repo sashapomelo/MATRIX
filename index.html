@@ -83,7 +83,7 @@
   #dock{
     position:fixed;
     left:0; right:0;
-    bottom:max(16px, env(safe-area-inset-bottom,0px));
+    bottom:max(8px, env(safe-area-inset-bottom,0px));
     display:flex;
     justify-content:center;
     padding-left:max(16px, env(safe-area-inset-left,0px));
@@ -139,7 +139,7 @@
   #settingsPanel{
     position:fixed;
     right:max(16px, env(safe-area-inset-right,0px));
-    bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 66px);
+    bottom:calc(max(8px, env(safe-area-inset-bottom,0px)) + 66px);
     width:min(300px, calc(100vw - 32px));
     padding:14px;
     border:1px solid var(--panel-border);
@@ -190,7 +190,7 @@
   #hint{
     position:fixed;
     left:50%;
-    bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 66px);
+    bottom:calc(max(8px, env(safe-area-inset-bottom,0px)) + 66px);
     transform:translateX(-50%);
     font-size:11px;
     line-height:1.5;
