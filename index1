@@ -1,0 +1,1683 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Talking to the Matrix</title>
+<!-- home-screen icon: without this, iOS falls back to a plain square with the
+     page title's first letter, which is the "big T" you were seeing. -->
+<link rel="apple-touch-icon" href="data:image/png;base64,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">
+<style>
+  /*
+    Layout concept: one full-bleed canvas carries the whole scene (rain, touch
+    deflection, the revealed reply); a single floating glass dock at the
+    bottom holds the only controls that need to exist on top of it.
+    Committed single dark world (terminal phosphor), so no light-theme branch.
+  */
+  :root{
+    --bg:#000400;
+    --rain-dim:#0a3d18;
+    --rain-mid:#1fae4a;
+    --rain-bright:#8dffb0;
+    --phosphor:#39ff6a;
+    --phosphor-dim:#1c7a38;
+    --ink:#c9ffd6;
+    --ink-dim:#5fae7c;
+    --danger:#ff5f56;
+    --panel-bg:rgba(4,14,7,0.86);
+    --panel-border:rgba(57,255,106,0.28);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    overflow:hidden;
+    padding-left:max(0px, env(safe-area-inset-left,0px));
+    padding-right:max(0px, env(safe-area-inset-right,0px));
+  }
+  #scene{
+    position:fixed; inset:0;
+    display:block;
+    touch-action:none;
+    cursor:crosshair;
+  }
+
+  /* ---------- top status strip ---------- */
+  #status{
+    position:fixed;
+    top:max(14px, env(safe-area-inset-top,0px));
+    left:50%;
+    transform:translateX(-50%);
+    display:flex; align-items:center; gap:8px;
+    padding:6px 14px;
+    border:1px solid var(--panel-border);
+    border-radius:999px;
+    background:var(--panel-bg);
+    backdrop-filter:blur(6px);
+    font-size:12px;
+    letter-spacing:.04em;
+    color:var(--ink-dim);
+    pointer-events:none;
+    white-space:nowrap;
+    max-width:min(86vw, 520px);
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  #status .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--phosphor-dim);
+    flex:none;
+    box-shadow:0 0 6px var(--phosphor-dim);
+    transition:background .2s,box-shadow .2s;
+  }
+  #status.live .dot{background:var(--phosphor);box-shadow:0 0 8px var(--phosphor);}
+  #status.busy .dot{background:#ffd23a;box-shadow:0 0 8px #ffd23a;animation:pulse 1s infinite;}
+  #status.err .dot{background:var(--danger);box-shadow:0 0 8px var(--danger);}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* ---------- bottom dock ---------- */
+  #dock{
+    position:fixed;
+    left:0; right:0;
+    bottom:max(16px, env(safe-area-inset-bottom,0px));
+    display:flex;
+    justify-content:center;
+    padding-left:max(16px, env(safe-area-inset-left,0px));
+    padding-right:max(16px, env(safe-area-inset-right,0px));
+    pointer-events:none;
+  }
+  #dockInner{
+    pointer-events:auto;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    width:min(640px, 100%);
+    padding:8px;
+    border:1px solid var(--panel-border);
+    border-radius:16px;
+    background:var(--panel-bg);
+    backdrop-filter:blur(8px);
+    box-shadow:0 10px 40px rgba(0,0,0,0.5);
+  }
+  #msgInput{
+    flex:1;
+    min-width:0;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:var(--ink);
+    font-family:inherit;
+    font-size:16px;   /* iOS Safari auto-zooms the page on focus for any input under 16px --
+                          this is the only reliable way to stop that */
+    padding:8px 6px;
+  }
+  #msgInput::placeholder{color:var(--ink-dim);}
+  .dockBtn{
+    flex:none;
+    width:38px;height:38px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:10px;
+    border:1px solid var(--panel-border);
+    background:rgba(57,255,106,0.06);
+    color:var(--phosphor);
+    cursor:pointer;
+    font-size:16px;
+    transition:background .15s,transform .1s,color .15s;
+    user-select:none;
+  }
+  .dockBtn:hover{background:rgba(57,255,106,0.14);}
+  .dockBtn:active{transform:scale(.92);}
+  .dockBtn.active{background:var(--phosphor);color:#001a07;}
+  #micBtn.listening{background:var(--danger);border-color:var(--danger);color:#1a0000;animation:micPulse 1.1s infinite;}
+  @keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,95,86,.5)}50%{box-shadow:0 0 0 9px rgba(255,95,86,0)}}
+  #modeBtn{font-size:12px;font-weight:700;letter-spacing:.02em;}
+
+  /* ---------- settings panel ---------- */
+  #settingsPanel{
+    position:fixed;
+    right:max(16px, env(safe-area-inset-right,0px));
+    bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 66px);
+    width:min(300px, calc(100vw - 32px));
+    padding:14px;
+    border:1px solid var(--panel-border);
+    border-radius:14px;
+    background:var(--panel-bg);
+    backdrop-filter:blur(8px);
+    box-shadow:0 10px 40px rgba(0,0,0,0.5);
+    font-size:12.5px;
+    color:var(--ink-dim);
+  }
+  #settingsPanel h3{
+    margin:0 0 10px;
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--phosphor);
+    font-weight:600;
+  }
+  #settingsPanel label{display:block;margin:10px 0 4px;color:var(--ink);}
+  #settingsPanel input{
+    width:100%;
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    color:var(--ink);
+    font-family:inherit;
+    font-size:16px;   /* same iOS zoom-on-focus fix as #msgInput */
+    padding:7px 8px;
+    outline:none;
+  }
+  #settingsPanel .hint{margin-top:8px;line-height:1.5;color:var(--ink-dim);}
+  #settingsPanel .hint a{color:var(--phosphor);text-decoration:none;}
+  #settingsPanel .row{display:flex;gap:8px;margin-top:12px;}
+  #settingsPanel button{
+    flex:1;
+    padding:8px;
+    border-radius:8px;
+    border:1px solid var(--panel-border);
+    background:rgba(57,255,106,0.08);
+    color:var(--phosphor);
+    font-family:inherit;
+    font-size:12px;
+    cursor:pointer;
+  }
+  #settingsPanel button:active{transform:scale(.97);}
+  [hidden]{display:none!important;}
+
+  #hint{
+    position:fixed;
+    left:50%;
+    bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 62px);
+    transform:translateX(-50%);
+    font-size:8px;
+    letter-spacing:.01em;
+    color:var(--ink-dim);
+    pointer-events:none;
+    white-space:nowrap;        /* one lean line, no box -- just dim text */
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:calc(100vw - 24px);
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div id="status" class="live"><span class="dot"></span><span id="statusText">rain running</span></div>
+
+<div id="hint">hold=push/pull · swipe=steer · 3×tap=burst · 2-finger=stretch/pinch · 5s=reveal</div>
+
+<div id="settingsPanel" hidden>
+  <h3>Matrix Voice</h3>
+  <label for="apiKey">Gemini API key</label>
+  <input id="apiKey" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false">
+  <label for="modelId">Model</label>
+  <input id="modelId" type="text" placeholder="gemini-3.6-flash" spellcheck="false">
+  <div class="hint">Stored only in this browser. Get a free key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>. If replies stop working, that page will show the current free model id — paste it above.</div>
+  <div class="row">
+    <button id="settingsSave">Save</button>
+    <button id="settingsClose">Close</button>
+  </div>
+</div>
+
+<div id="dock">
+  <div id="dockInner">
+    <button class="dockBtn" id="modeBtn" title="touch mode: push / pull / splash">P</button>
+    <input id="msgInput" type="text" placeholder="Speak or type..." autocomplete="off" spellcheck="false">
+    <button class="dockBtn" id="micBtn" title="speak">🎤</button>
+    <button class="dockBtn" id="sendBtn" title="send">➤</button>
+    <button class="dockBtn" id="settingsBtn" title="settings">⚙</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================================================================
+   CANVAS / GRID SETUP
+   ====================================================================== */
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d', { alpha:false });
+let W=0, H=0, DPR=1;
+
+const GW = 14, GH = 20;      // glyph cell -- same role as GW/GH on the CYD build
+const FONT_PX = 17;          // rain glyph font size
+const MSG_FONT_PX = 13;      // white locked-in message text font size -- independent of the
+                              // rain's own size now; lower this alone to shrink just the text.
+let COLS = 0, ROWS = 0;      // grid dimensions, recomputed on resize
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W*DPR);
+  canvas.height = Math.round(H*DPR);
+  canvas.style.width = W+'px';
+  canvas.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  COLS = Math.floor(W/GW);
+  ROWS = Math.floor(H/GH);
+  buildStreams();
+  // an active message was laid out for the OLD screen size -- its rows/columns no longer
+  // line up after a rotation, which is what was making it jump to a wrong spot for a moment.
+  // Simplest safe fix: just clear it on resize rather than try to reflow it mid-animation.
+  msg = null;
+}
+window.addEventListener('resize', resize);
+
+/* ======================================================================
+   GLYPH ALPHABET -- half-width katakana + digits, the classic rain set
+   ====================================================================== */
+const GLYPHS = (function(){
+  const kata = [];
+  for (let c = 0xFF66; c <= 0xFF9D; c++) kata.push(String.fromCharCode(c));
+  const digits = '0123456789'.split('');
+  return kata.concat(digits);
+})();
+function randGlyph(){ return GLYPHS[(Math.random()*GLYPHS.length)|0]; }
+
+/* ======================================================================
+   COLOR HELPERS
+   ====================================================================== */
+function hex2rgb(h){ h=h.replace('#',''); return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+const C_BG    = hex2rgb('000400');
+const C_DIM   = hex2rgb('0a3d18');
+const C_MID   = hex2rgb('1fae4a');
+const C_HEAD  = hex2rgb('bdffd2');
+function lerp(a,b,t){ return a+(b-a)*t; }
+function mixRGB(c1,c2,t){
+  t = Math.max(0, Math.min(1,t));
+  return [lerp(c1[0],c2[0],t)|0, lerp(c1[1],c2[1],t)|0, lerp(c1[2],c2[2],t)|0];
+}
+function rgbCss(c){ return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+/* ======================================================================
+   RAIN STREAMS -- ported 1:1 from the CYD build's push/pull/splash math
+   (d' = sqrt(d^2 + R^2) deflection), with the same axis-agnostic
+   pos/cross trick so a stream doesn't care whether rain is falling or
+   flowing sideways.
+   ====================================================================== */
+let streams = [];
+const MAXLEN = 22, MINLEN = 8;
+let rainHoriz = false;     // false = vertical fall, true = horizontal flow
+let rainDir = 1;           // 1 = down/right, -1 = up/left
+let rainVelMod = 1.0;       // swipe-triggered speed pulse, eases back to 1
+let rainCalm = 1.0;         // eases 0->1 after a redirect/burst restart
+
+function newStream(initial){
+  const horiz = rainHoriz;
+  const cross = horiz ? (Math.random()*ROWS|0) : (Math.random()*COLS|0);
+  const len = MINLEN + (Math.random()*(MAXLEN-MINLEN)|0);
+  const v = 1.2 + Math.random()*2.2;
+  const chars = []; for (let i=0;i<len;i++) chars.push(randGlyph());
+  const extent = horiz ? W : H;
+  const cell = horiz ? GW : GH;
+  let pos;
+  if (initial){
+    pos = rainDir>0 ? -(Math.random()*extent) : extent + Math.random()*extent;
+  } else {
+    pos = rainDir>0 ? -len*cell - Math.random()*40 : extent + len*cell + Math.random()*40;
+  }
+  return { horiz, cross, len, v, chars, pos, jitter:0, splashT:0, knockT:0 };
+}
+function resetStream(s){
+  const ns = newStream(false);
+  s.horiz=ns.horiz; s.cross=ns.cross; s.len=ns.len; s.v=ns.v; s.chars=ns.chars; s.pos=ns.pos;
+}
+function buildStreams(){
+  const target = Math.max(24, Math.min(170, Math.round((rainHoriz?ROWS:COLS) * 1.6)));
+  streams = [];
+  for (let i=0;i<target;i++) streams.push(newStream(true));
+}
+
+/* ======================================================================
+   POINTER -- push / pull / splash, same math as the CYD's finger hole
+   ====================================================================== */
+const MODES = ['push','pull','splash'];
+let modeIdx = 0;
+let fx=0, fy=0, touching=false, fR=0;
+const MAX_R = 46, SPLASH_R = 30;
+
+/* swipe + tap tracking (ported thresholds from the CYD build) */
+let swipeStartX=0, swipeStartY=0, swipeStartT=0, swipeFired=false;
+let taps = [0,0,0];
+
+function handleSwipe(x,y,now){
+  if (swipeFired) return;
+  const dt = now - swipeStartT;
+  if (dt >= 450){ swipeFired = true; return; }
+  const ddx = x-swipeStartX, ddy = y-swipeStartY;
+  const dist = Math.sqrt(ddx*ddx+ddy*ddy);
+  if (dist <= 34) return;
+  const swipeHoriz = Math.abs(ddx) > Math.abs(ddy);
+  const swipeDir = swipeHoriz ? (ddx>0?1:-1) : (ddy>0?1:-1);
+  const redirectThresh = (swipeHoriz ? W : H) * 0.62;
+  if (swipeHoriz === rainHoriz && swipeDir === rainDir){
+    rainVelMod = 3.5; swipeFired = true;
+  } else if (swipeHoriz === rainHoriz){
+    if (dist > redirectThresh){
+      rainDir = -rainDir;
+      streams.forEach(resetStream);
+      rainCalm = 0.25; rainVelMod = 1.0;
+    } else {
+      rainVelMod = -0.35;
+    }
+    swipeFired = true;
+  } else if (dist > redirectThresh){
+    rainHoriz = swipeHoriz; rainDir = swipeDir;
+    buildStreams();
+    rainCalm = 0.25; rainVelMod = 1.0;
+    swipeFired = true;
+  }
+}
+
+let burstParticles = null, burstFrame = 0;
+const BURST_FRAMES = 55;
+function startBurst(bx,by){
+  burstParticles = [];
+  for (const s of streams){
+    const cell = s.horiz ? GW : GH;
+    for (let i=0;i<s.len;i++){
+      const gpos = s.pos - i*cell*rainDir;
+      let cx,cy;
+      if (!s.horiz){ cx = s.cross*GW + GW/2; cy = gpos + GH/2; }
+      else { cx = gpos + GW/2; cy = s.cross*GH + GH/2; }
+      if (cx<-GW||cx>W+GW||cy<-GH||cy>H+GH) continue;
+      let dx=cx-bx, dy=cy-by, d=Math.sqrt(dx*dx+dy*dy);
+      if (d<2){ dx=(Math.random()-0.5); dy=(Math.random()-0.5); d=1; }
+      const speed = 2.5 + Math.random()*4.5;
+      burstParticles.push({
+        x:cx, y:cy, vx:dx/d*speed, vy:dy/d*speed - 1.5,
+        col: i===0 ? C_HEAD : mixRGB(C_MID,C_BG,(i*0.9)/s.len),
+        ch: s.chars[i]
+      });
+    }
+  }
+  burstFrame = 1;
+}
+
+/* ======================================================================
+   TWO-FINGER STRETCH / PINCH -- part, squish, or crunch the rain like
+   handling a bundle of parallel cables that run along the flow direction.
+
+   Model: each streak is a solid cable running along the current flow
+   axis (down/up normally, sideways if the rain has been swiped
+   horizontal). Everything is measured in flow/cross axis terms
+   (relative to the CURRENT rain orientation, not fixed screen x/y):
+     - crossOf/flowOf split any (x,y) into its component across the
+       cables (sideways) and along them (lengthwise).
+     - CROSS-axis spread growth (fingers moving apart sideways) opens a
+       part -- pushes cables away from the gap between your fingers.
+     - CROSS-axis spread shrinking (pinching together sideways) does the
+       mirror opposite -- squishes cables together toward that gap.
+     - FLOW-axis spread shrinking (pinching together lengthwise, e.g.
+       top and bottom for normal vertical rain) crunches the glyphs
+       along their own run together, between the two fingers.
+     - FLOW-axis spread growing (pulling fingers apart lengthwise) is
+       the mirror of that crunch -- stretches the glyphs apart lengthwise
+       instead. Near-vertical fingers naturally produce mostly flow-axis
+       movement (so spreading/pinching them does the lengthwise effects),
+       while near-horizontal fingers naturally produce mostly cross-axis
+       movement (so it does the sideways part/squish instead) -- the
+       switch between the two is just this decomposition, no extra logic.
+
+   Two more things, both specifically about the SIDEWAYS part/squish:
+     - the curve bends to follow each finger's own actual position
+       (not one shared fixed axis), and the whole shape is one smooth,
+       rounded taper -- no sharp corners anywhere.
+     - how WIDE a sideways opening/squish you can reach is capped by how
+       close to horizontal your fingers were when you first put them
+       down (more horizontal = more width available), and that cap is
+       locked in for the duration of this touch -- moving your fingers
+       further apart/closer together (without lifting) freely changes
+       the width up to that cap, but raising the cap itself means
+       lifting and starting a fresh two-finger touch at a flatter angle.
+
+   Deliberately NOT persistent: all four effects only exist while
+   exactly two fingers are down (one finger lifting kills them
+   immediately, same instant-reset feel as every other touch gesture
+   here), and each engages slowly ("resistive") but releases fast.
+   ====================================================================== */
+let pointers = new Map(); // live pointerId -> {x,y}, at most 2 tracked
+let stretchStartCross = 0, stretchStartFlow = 0;
+let stretchMaxThisGesture = 0, squishMaxThisGesture = 0; // angle-gated caps, locked at gesture start
+let vStretchMaxThisGesture = 0; // vertical-stretch cap, locked at gesture start (full at purely vertical, tapers the more diagonal)
+let vStretchSensThisGesture = 0; // vertical-stretch sensitivity, same idea -- fastest-growing at purely vertical, gentler the more diagonal
+let vStretchReachThisGesture = 0; // how far lengthwise the opening can extend, locked at gesture start -- shortest at purely diagonal
+let stretchMode = 'none'; // 'horiz' or 'vert' -- which pair of effects this touch is allowed to engage, locked at gesture start
+let stretchOpen = 0;    // sideways part amount (push radius)
+let stretchSquish = 0;  // sideways pinch amount (0..squishMaxThisGesture fraction, pulls toward center)
+let vSquish = 0;        // lengthwise pinch amount (0..V_SQUISH_MAX fraction, crunches along the cable)
+let vStretch = 0;       // lengthwise spread amount (push radius, mirrors vSquish)
+let stretchP1 = null, stretchP2 = null; // last known finger positions, frozen while closing
+const STRETCH_SENSITIVITY = 0.9;   // how much cross-axis spread growth turns into open radius
+const STRETCH_MAX = 150;           // how wide the opening can get at a perfectly horizontal angle
+const STRETCH_OPEN_EASE = 0.055;   // slow -- the "resistance" when engaging any of the 4 effects
+const STRETCH_CLOSE_EASE = 0.3;    // fast -- snaps shut once you let go (or reverse direction)
+const STRETCH_REACH = 140;         // how far along the cables the part/squish fades out from the fingers
+const SQUISH_SENSITIVITY = 0.005;  // px of sideways pinch -> compression fraction
+const SQUISH_MAX = 0.55;           // cap so cables never fully collapse to a line (toned down -- was crushing almost to center)
+const ANGLE_MIN_FRACTION = 0.15;   // fingers need to be at least this close to horizontal to unlock any width
+const V_SQUISH_SENSITIVITY = 0.011;// px of lengthwise pinch -> compression fraction (turned up again -- still not enough effect)
+const V_SQUISH_MAX = 0.97;         // turned up further -- still capped below 1 so cables never fully collapse to a line
+const V_STRETCH_SENSITIVITY = 1.2; // px of lengthwise spread -> push radius (turned up -- was a bit sluggish to open)
+const V_STRETCH_MAX = 142;         // a bit bigger still of a hole than before, for a clean vertical stretch
+const V_SQUISH_WIDTH = 100;        // how wide (sideways) the lengthwise crunch/stretch zone reaches
+const V_SQUISH_REACH = 130;        // how far past the fingertips the crunch fades out, lengthwise
+const V_STRETCH_REACH = 150;       // how far past the fingertips the stretch opening fades out, lengthwise (full-strength baseline; tightened per-gesture the more diagonal)
+
+/* REVEAL -- holding either OPENING effect (sideways part or lengthwise stretch --
+   not the pinch/squish ones, those close things rather than open them) at close
+   to its max for a sustained beat starts revealing something behind the rain.
+   Simple placeholder graphic for now, meant to evolve later -- this first pass
+   is just about getting the trigger feel and the edge-of-the-opening look right. */
+let revealAmt = 0;      // eased 0..1 visibility of the reveal
+let lastFrameT = 0;     // for real-elapsed-time tracking, independent of frame rate
+const INSIDES_SHOW_THRESHOLD = 18; // px of actual opening/stretch before the insides start showing -- no hold, no wipe, just "open it enough and you can see through"
+const REVEAL_FADE_MS = 180;    // quick fade so crossing the threshold doesn't flicker on/off, but it still reads as "right away"
+
+// cross axis = across the cables (sideways); flow axis = along their run (lengthwise).
+// Both flip automatically with the rain's current orientation (rainHoriz).
+function crossOf(x,y){ return rainHoriz ? y : x; }
+function flowOf(x,y){ return rainHoriz ? x : y; }
+
+canvas.addEventListener('pointerdown', (e)=>{
+  canvas.setPointerCapture(e.pointerId);
+  if (pointers.size >= 2){ return; } // ignore a third finger, keep the first two
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+  if (pointers.size === 2){
+    // entering two-finger mode -- cancel anything the first finger was doing
+    touching = false; swipeFired = true;
+    const pts = [...pointers.values()];
+    stretchStartCross = Math.abs(crossOf(pts[1].x,pts[1].y) - crossOf(pts[0].x,pts[0].y));
+    stretchStartFlow  = Math.abs(flowOf(pts[1].x,pts[1].y)  - flowOf(pts[0].x,pts[0].y));
+    // angle factor: 0 when fingers are placed purely along the flow axis (vertical,
+    // for normal rain), 1 when placed purely along the cross axis (horizontal).
+    const totalStart = Math.sqrt(stretchStartCross*stretchStartCross + stretchStartFlow*stretchStartFlow);
+    const rawAngle = totalStart > 1 ? stretchStartCross/totalStart : 0;
+    const angleFactor = Math.max(0, (rawAngle - ANGLE_MIN_FRACTION) / (1-ANGLE_MIN_FRACTION));
+    stretchMaxThisGesture = STRETCH_MAX * angleFactor;
+    squishMaxThisGesture = SQUISH_MAX * angleFactor;
+    // vertical stretch: full strength at a perfectly vertical placement, tapering
+    // down substantially the more diagonal the fingers are (rawAngle creeping up
+    // toward the 0.5 vert/horiz mode boundary) -- a diagonal vertical stretch
+    // should feel noticeably reined-in compared to a clean vertical one, which
+    // was reaching far too wide/long (almost off-screen) before this was tightened.
+    vStretchMaxThisGesture = V_STRETCH_MAX * (1 - 0.6*Math.min(0.5, rawAngle));
+    // sensitivity gets a bigger diagonal penalty than the max does -- a diagonal
+    // vertical stretch should not just top out lower, it should also grow more
+    // slowly getting there, so it reads as clearly less "potent" overall.
+    vStretchSensThisGesture = V_STRETCH_SENSITIVITY * (1 - 0.75*Math.min(0.5, rawAngle));
+    // how far lengthwise the opening can reach also shrinks the more diagonal the
+    // placement is -- this is what actually keeps a diagonal stretch from
+    // extending way down/up the screen, independent of its peak width.
+    vStretchReachThisGesture = V_STRETCH_REACH * (1 - 0.5*Math.min(0.5, rawAngle));
+    // the whole CHARACTER of this gesture -- vertical (lengthwise) vs horizontal
+    // (sideways) -- is decided right now, once, from the starting angle, and never
+    // changes for the rest of this touch. Rotating your fingers afterward can only
+    // change the AMOUNT of whichever one this is; getting the other one means
+    // lifting and starting a fresh two-finger touch at a different angle.
+    stretchMode = rawAngle >= 0.5 ? 'horiz' : 'vert';
+    stretchP1 = pts[0]; stretchP2 = pts[1];
+    return;
+  }
+
+  // normal single-finger path, unchanged
+  touching = true;
+  fx = e.clientX; fy = e.clientY;
+  swipeStartX = fx; swipeStartY = fy; swipeStartT = performance.now(); swipeFired = false;
+  const now = performance.now();
+  if (taps[0] !== 0 && now - taps[0] < 550){
+    startBurst(fx, fy);
+    taps = [0,0,0];
+  } else {
+    taps[0]=taps[1]; taps[1]=taps[2]; taps[2]=now;
+    if (taps[0]===0) taps[0]=now;
+  }
+});
+canvas.addEventListener('pointermove', (e)=>{
+  if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+
+  if (pointers.size === 2){
+    const pts = [...pointers.values()];
+    stretchP1 = pts[0]; stretchP2 = pts[1];
+    return;
+  }
+  fx = e.clientX; fy = e.clientY;
+  if (touching) handleSwipe(fx, fy, performance.now());
+});
+function pointerUp(e){
+  pointers.delete(e.pointerId);
+  if (pointers.size === 1){
+    // one finger remains -- resume ordinary single-finger touch fresh from here,
+    // rather than carry over stale swipe timing from before the two-finger gesture
+    const [p] = pointers.values();
+    touching = true; fx = p.x; fy = p.y;
+    swipeStartX = fx; swipeStartY = fy; swipeStartT = performance.now(); swipeFired = false;
+  } else if (pointers.size === 0){
+    touching = false;
+  }
+}
+canvas.addEventListener('pointerup', pointerUp);
+canvas.addEventListener('pointercancel', pointerUp);
+canvas.addEventListener('pointerleave', (e)=>{ pointerUp(e); });
+
+/* shared by the sideways part + squish: bends the "center line" to follow
+   each finger's own actual position (not one shared fixed axis), and
+   gives a single smooth, rounded (cosine) amplitude bump peaking between
+   the fingers and fading into the reach zone beyond them -- no sharp
+   corners anywhere, unlike a flat-topped/linear falloff. */
+function laneShape(f, f1, f2, c1, c2){
+  const fSpan = f2 - f1;
+  const crossSpan = c2 - c1;
+
+  // how diagonal the two fingers actually are, relative to how far apart they are
+  // sideways -- not an absolute pixel threshold. A couple of fingers meant to be
+  // level (near-horizontal placement) always have a few px of natural hand jitter
+  // between them; treating that jitter as "real" height difference is what caused
+  // the broken double-wedge shape -- everything above the (nearly equal) finger
+  // heights would bend hard toward one finger's x, everything below toward the
+  // other's, with a sharp split between. Scaling by how big fSpan is COMPARED to
+  // crossSpan means only a genuinely diagonal placement bends the curve by height;
+  // a mostly-horizontal (or mostly-vertical) one smoothly ignores the jitter and
+  // falls back to one clean, symmetric opening.
+  const diagonalness = Math.min(1, Math.abs(fSpan) / (Math.abs(crossSpan)*0.35 + 40));
+
+  const crossMidFixed = (c1+c2)/2;
+  let crossMidBent = crossMidFixed;
+  if (Math.abs(fSpan) > 2){
+    const fClamped = Math.min(Math.max(f, Math.min(f1,f2)), Math.max(f1,f2));
+    const t = (fClamped - f1) / fSpan;
+    crossMidBent = c1 + (c2-c1)*t; // bends between the two fingers' own cross positions
+  }
+  const crossMid = crossMidFixed + (crossMidBent - crossMidFixed) * diagonalness;
+
+  const fMid = (f1+f2)/2;
+  const halfSpan = Math.abs(fSpan)/2;
+  const totalHalf = halfSpan + STRETCH_REACH;
+  const dist = Math.abs(f - fMid);
+  const amp = dist >= totalHalf ? 0 : 0.5*(1+Math.cos(Math.PI*dist/totalHalf));
+  return { crossMid, amp };
+}
+
+/* part a glyph sideways (cross axis only -- its position along the cable's
+   own run, the flow axis, is never touched) away from the curve between
+   the two fingers. */
+function deflectAgainstStretch(cx, cy){
+  if (stretchOpen < 1 || !stretchP1 || !stretchP2) return { cx, cy, glow:0 };
+  const f1=flowOf(stretchP1.x,stretchP1.y), f2=flowOf(stretchP2.x,stretchP2.y);
+  const c1=crossOf(stretchP1.x,stretchP1.y), c2=crossOf(stretchP2.x,stretchP2.y);
+  const f = flowOf(cx,cy), c = crossOf(cx,cy);
+  const { crossMid, amp } = laneShape(f,f1,f2,c1,c2);
+  if (amp <= 0) return { cx, cy, glow:0 };
+
+  let dCross = c - crossMid;
+  const sign = dCross < 0 ? -1 : 1;
+  if (Math.abs(dCross) < 0.5) dCross = sign*0.5;
+  const R = stretchOpen * amp; // radius itself shrinks with amp, so this smoothly
+  const nd = Math.sqrt(dCross*dCross + R*R); // reduces to the identity (no push) as amp->0
+  let glow = 0;
+  if (R > 0.5){ glow = 1 - (nd-R)/(R*3); if (glow<0) glow=0; }
+
+  const newCross = crossMid + sign*nd;
+  return rainHoriz
+    ? { cx, cy: newCross, glow }
+    : { cx: newCross, cy, glow };
+}
+
+/* mirror of deflectAgainstStretch -- pulls a glyph TOWARD the curve
+   between the two fingers instead of away, squishing cables together
+   sideways. Same shape, compression instead of a push. */
+function deflectAgainstSquish(cx, cy){
+  if (stretchSquish < 0.01 || !stretchP1 || !stretchP2) return { cx, cy, glow:0 };
+  const f1=flowOf(stretchP1.x,stretchP1.y), f2=flowOf(stretchP2.x,stretchP2.y);
+  const c1=crossOf(stretchP1.x,stretchP1.y), c2=crossOf(stretchP2.x,stretchP2.y);
+  const f = flowOf(cx,cy), c = crossOf(cx,cy);
+  const { crossMid, amp } = laneShape(f,f1,f2,c1,c2);
+  if (amp <= 0) return { cx, cy, glow:0 };
+
+  const dCross = c - crossMid;
+  const pull = stretchSquish * amp; // 0..~squishMaxThisGesture
+  const newCross = crossMid + dCross*(1-pull);
+  return rainHoriz
+    ? { cx, cy: newCross, glow: pull }
+    : { cx: newCross, cy, glow: pull };
+}
+
+/* shared by the lengthwise crunch + stretch: a smooth (cosine), rounded
+   zone centered on the midpoint between the two fingers -- width-limited
+   sideways, and fading past the fingertips lengthwise. */
+function crunchZone(c, f, crossMid, flowMid, halfSpan){
+  const crossDist = Math.abs(c - crossMid);
+  if (crossDist >= V_SQUISH_WIDTH) return 0;
+  const crossFactor = 0.5*(1+Math.cos(Math.PI*crossDist/V_SQUISH_WIDTH));
+  const totalHalf = halfSpan + V_SQUISH_REACH;
+  const dist = Math.abs(f - flowMid);
+  if (dist >= totalHalf) return 0;
+  const lenFactor = 0.5*(1+Math.cos(Math.PI*dist/totalHalf));
+  return crossFactor * lenFactor;
+}
+
+/* pinching the two fingers together LENGTHWISE (along the cable's own
+   run -- up/down for normal vertical rain) crunches the glyphs between
+   the fingers together along that same axis, like squeezing an
+   accordion, localized to a rounded zone between and around the fingers. */
+function deflectAgainstVSquish(cx, cy){
+  if (vSquish < 0.01 || !stretchP1 || !stretchP2) return { cx, cy, glow:0 };
+  const midX = (stretchP1.x+stretchP2.x)/2, midY = (stretchP1.y+stretchP2.y)/2;
+  const crossMid = crossOf(midX,midY), flowMid = flowOf(midX,midY);
+  const halfSpan = Math.abs(flowOf(stretchP2.x,stretchP2.y) - flowOf(stretchP1.x,stretchP1.y)) / 2;
+  const c = crossOf(cx,cy), f = flowOf(cx,cy);
+
+  const amp = crunchZone(c,f,crossMid,flowMid,halfSpan);
+  if (amp <= 0) return { cx, cy, glow:0 };
+  const pull = vSquish * amp;
+  const newFlow = flowMid + (f-flowMid)*(1-pull);
+  return rainHoriz
+    ? { cx: newFlow, cy, glow: pull }
+    : { cx, cy: newFlow, glow: pull };
+}
+
+/* mirror of deflectAgainstVSquish -- spreading the two fingers apart
+   LENGTHWISE stretches the glyphs between/around them apart along that
+   same axis instead of crunching them together. Same rounded zone,
+   push instead of pull. */
+function deflectAgainstVStretch(cx, cy){
+  if (vStretch < 1 || !stretchP1 || !stretchP2) return { cx, cy, glow:0 };
+  const midX = (stretchP1.x+stretchP2.x)/2, midY = (stretchP1.y+stretchP2.y)/2;
+  const crossMid = crossOf(midX,midY), flowMid = flowOf(midX,midY);
+  const halfSpan = Math.abs(flowOf(stretchP2.x,stretchP2.y) - flowOf(stretchP1.x,stretchP1.y)) / 2;
+  const c = crossOf(cx,cy), f = flowOf(cx,cy);
+
+  const crossDist = Math.abs(c-crossMid);
+  if (crossDist >= V_SQUISH_WIDTH) return { cx, cy, glow:0 };
+  const crossFactor = 0.5*(1+Math.cos(Math.PI*crossDist/V_SQUISH_WIDTH));
+
+  let dFlow = f - flowMid;
+  const sign = dFlow < 0 ? -1 : 1;
+  if (Math.abs(dFlow) < 0.5) dFlow = sign*0.5;
+
+  // hard lengthwise reach cutoff -- without this, the raw sqrt(d²+R²) push
+  // trails off only very gradually with distance, so once R itself got big
+  // (especially on a near-vertical/diagonal gesture) the opening visually
+  // extended way too far up/down the screen. Scaling R itself to 0 by the
+  // gesture's own reach limit gives a clean, bounded edge instead.
+  const reach = vStretchReachThisGesture || V_STRETCH_REACH;
+  const totalHalf = halfSpan + reach;
+  const reachDist = Math.abs(dFlow);
+  if (reachDist >= totalHalf) return { cx, cy, glow:0 };
+  const reachFactor = 0.5*(1+Math.cos(Math.PI*reachDist/totalHalf));
+
+  const R = vStretch * crossFactor * reachFactor;
+  const nd = Math.sqrt(dFlow*dFlow + R*R);
+  let glow = 0;
+  if (R > 0.5){ glow = 1 - (nd-R)/(R*3); if (glow<0) glow=0; }
+
+  const newFlow = flowMid + sign*nd;
+  return rainHoriz
+    ? { cx: newFlow, cy, glow }
+    : { cx, cy: newFlow, glow };
+}
+
+document.getElementById('modeBtn').addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+  modeIdx = (modeIdx+1) % MODES.length;
+  const btn = e.currentTarget;
+  btn.textContent = MODES[modeIdx][0].toUpperCase();
+});
+
+/* ======================================================================
+   MESSAGE REVEAL -- word-wrap + center, flicker-then-lock, hold, retreat,
+   per-line solid-rectangle push deflection with the hard safety-net
+   absorb check. Ported from the CYD build's msgStartReveal()/rainFrame().
+   ====================================================================== */
+const MSG_STEP_MS = 60;            // halved vs the CYD's 320ms -- a laptop screen
+                                     // shows far more of the message at once, so the
+                                     // same per-letter pace reads as sluggish here
+const MSG_RETREAT_STEP_MS = 20;
+const MSG_FLICKER_LEAD_MS = MSG_STEP_MS;
+const MSG_HOLD_MS = 2200;
+const LINE_GAP_PX = 2;
+
+let msg = null; // null when nothing is being revealed
+
+function wrapCols(){ return Math.max(10, Math.min(COLS, Math.round(COLS*0.78))); }
+
+function msgStartReveal(text){
+  text = text.trim().replace(/\s+/g,' ');
+  if (!text) return;
+  const maxRows = ROWS;
+  const wrapC = wrapCols();
+  const lineBuf = []; let lineLen = [];
+  let row=0, col=0, i=0, n=text.length;
+  lineBuf.push(new Array(COLS).fill(' '));
+  while (i<n && row<maxRows){
+    let wStart=i; while (i<n && text[i]!==' ') i++;
+    let wLen = i-wStart; if (wLen>wrapC) wLen=wrapC;
+    if (col>0 && col+wLen>wrapC){ row++; col=0; if (row>=maxRows) break; lineBuf.push(new Array(COLS).fill(' ')); }
+    for (let k=0;k<wLen && col<COLS;k++) lineBuf[row][col++] = text[wStart+k];
+    lineLen[row] = col;
+    if (i<n && text[i]===' '){ i++; if (col<COLS) col++; }
+  }
+  let numLines = row+1; if (numLines>maxRows) numLines = maxRows;
+
+  const totalPixelSpan = numLines*GH + (numLines-1)*LINE_GAP_PX;
+  let pixelOffset = Math.round((H - totalPixelSpan)/2);
+  if (pixelOffset < 0) pixelOffset = 0;
+
+  const now = performance.now();
+  const grid = [];           // grid[r][c] = char or ' '
+  const lockAt = [];         // lockAt[r][c]
+  const orderIdx = [];       // orderIdx[r][c], -1 for space
+  const orderCol = [];       // reverse lookup orderCol[idx] -> {r,c}
+  const rowPixelY = new Array(numLines);
+  const lineOrderStart = new Array(numLines), lineOrderEnd = new Array(numLines);
+  let idx = 0;
+  for (let r=0;r<numLines;r++){
+    grid.push(new Array(COLS).fill(' '));
+    lockAt.push(new Array(COLS).fill(0));
+    orderIdx.push(new Array(COLS).fill(-1));
+    const len = lineLen[r]||0;
+    const colOffset = Math.max(0, Math.round((COLS-len)/2));
+    rowPixelY[r] = pixelOffset + r*(GH+LINE_GAP_PX);
+    lineOrderStart[r] = idx;
+    for (let c=0;c<len;c++){
+      const ch = lineBuf[r][c];
+      if (ch===' ') continue;
+      const gc = c+colOffset; if (gc>=COLS) continue;
+      grid[r][gc] = ch;
+      lockAt[r][gc] = now + idx*MSG_STEP_MS + Math.random()*40;
+      orderIdx[r][gc] = idx;
+      orderCol[idx] = { r, c:gc };
+      idx++;
+    }
+    lineOrderEnd[r] = idx;
+  }
+  msg = {
+    grid, lockAt, locked: grid.map(row=>row.map(()=>false)), orderIdx, orderCol,
+    numLines, rowPixelY, lineOrderStart, lineOrderEnd,
+    totalLetters: idx, revealStartAt: now, revealUpTo: 0,
+    allLocked:false, revealDoneAt:0,
+    retreating:false, retreatStartAt:0, retreatTargetIdx:0,
+    lineRects: [] // rebuilt every frame: {colL,colR,row}
+  };
+}
+
+function msgAdvance(now){
+  if (!msg) return;
+  let allLocked = true;
+  for (let r=0;r<msg.numLines;r++){
+    for (let c=0;c<COLS;c++){
+      if (msg.grid[r][c]===' ') continue;
+      if (!msg.locked[r][c]){
+        if (now >= msg.lockAt[r][c]) msg.locked[r][c] = true;
+        else allLocked = false;
+      }
+    }
+  }
+  if (allLocked && !msg.allLocked){ msg.allLocked = true; msg.revealDoneAt = now; }
+
+  let raw = Math.floor((now - msg.revealStartAt + MSG_FLICKER_LEAD_MS) / MSG_STEP_MS) + 1;
+  if (raw<0) raw=0; if (raw>msg.totalLetters) raw=msg.totalLetters;
+  msg.revealUpTo = raw;
+
+  if (msg.allLocked && !msg.retreating && now - msg.revealDoneAt > MSG_HOLD_MS){
+    msg.retreating = true; msg.retreatStartAt = now;
+  }
+  if (msg.retreating){
+    let target = Math.floor((now - msg.retreatStartAt) / MSG_RETREAT_STEP_MS);
+    if (target>msg.totalLetters) target = msg.totalLetters;
+    if (target>msg.retreatTargetIdx) msg.retreatTargetIdx = target;
+  }
+
+  msg.lineRects = [];
+  for (let L=0; L<msg.numLines; L++){
+    let vs = msg.lineOrderStart[L]; if (msg.retreatTargetIdx>vs) vs = msg.retreatTargetIdx;
+    let ve = msg.lineOrderEnd[L]; if (msg.revealUpTo<ve) ve = msg.revealUpTo;
+    if (vs<ve){
+      const colL = msg.orderCol[vs].c, colR = msg.orderCol[ve-1].c;
+      msg.lineRects.push({ colL, colR, row:L });
+    }
+  }
+
+  if (msg.retreating && msg.retreatTargetIdx >= msg.totalLetters){
+    msg = null;
+  }
+}
+
+/* push a point (cx,cy) away from the nearest message-line rectangle,
+   same d' = sqrt(d^2+R^2) formula as the finger push. Returns
+   {cx,cy,glow,absorbed}. */
+const MSG_MARGIN = 2, MSG_EDGE_R = 30, MSG_SAFE = 4;
+function deflectAgainstMessage(cx, cy){
+  if (!msg || msg.lineRects.length===0) return { cx, cy, glow:0, absorbed:false };
+  let bestD2 = Infinity, bestNX=0, bestNY=0;
+  for (const rect of msg.lineRects){
+    const rx0 = rect.colL*GW - MSG_MARGIN, rx1 = (rect.colR+1)*GW + MSG_MARGIN;
+    const ry0 = msg.rowPixelY[rect.row] - MSG_MARGIN, ry1 = msg.rowPixelY[rect.row] + GH + MSG_MARGIN;
+    let nx = cx, ny = cy;
+    if (nx<rx0) nx=rx0; else if (nx>rx1) nx=rx1;
+    if (ny<ry0) ny=ry0; else if (ny>ry1) ny=ry1;
+    const ddx=cx-nx, ddy=cy-ny, d2=ddx*ddx+ddy*ddy;
+    if (d2<bestD2){ bestD2=d2; bestNX=nx; bestNY=ny; }
+  }
+  const mdist = Math.sqrt(bestD2);
+  let glow = 0;
+  if (mdist > 0.01){
+    const mnd = Math.sqrt(mdist*mdist + MSG_EDGE_R*MSG_EDGE_R);
+    const mk = mnd/mdist;
+    cx = bestNX + (cx-bestNX)*mk;
+    cy = bestNY + (cy-bestNY)*mk;
+    glow = 1 - (mnd-MSG_EDGE_R)/(MSG_EDGE_R*3);
+    if (glow<0) glow=0;
+  } else {
+    cy = bestNY - MSG_EDGE_R; glow = 1;
+  }
+  const gx0 = cx-GW/2, gx1 = cx+GW/2, gy0 = cy-GH/2, gy1 = cy+GH/2;
+  for (const rect of msg.lineRects){
+    const rx0 = rect.colL*GW - MSG_SAFE, rx1 = (rect.colR+1)*GW + MSG_SAFE;
+    const ry0 = msg.rowPixelY[rect.row] - MSG_SAFE, ry1 = msg.rowPixelY[rect.row] + GH + MSG_SAFE;
+    if (gx1>rx0 && gx0<rx1 && gy1>ry0 && gy0<ry1) return { cx, cy, glow, absorbed:true };
+  }
+  return { cx, cy, glow, absorbed:false };
+}
+
+function drawMessageOverlay(now){
+  if (!msg) return;
+  ctx.font = `700 ${MSG_FONT_PX}px 'JetBrains Mono', monospace`;
+  ctx.textBaseline = 'top';
+  for (let r=0;r<msg.numLines;r++){
+    const py = msg.rowPixelY[r];
+    if (py+GH < 0 || py > H) continue;
+    for (let c=0;c<COLS;c++){
+      if (msg.grid[r][c]===' ') continue;
+      const oi = msg.orderIdx[r][c];
+      if (msg.retreating && oi>=0 && oi<msg.retreatTargetIdx) continue;
+      const locked = msg.locked[r][c];
+      if (!locked && !msg.retreating && msg.lockAt[r][c] > now + MSG_FLICKER_LEAD_MS) continue;
+      ctx.fillStyle = locked ? '#ffffff' : rgbCss(C_HEAD);
+      ctx.fillText(locked ? msg.grid[r][c] : randGlyph(), c*GW, py);
+    }
+  }
+}
+
+/* ======================================================================
+   INSIDES REVEAL -- "the guts of the matrix": a persistent field of tiny
+   glyph-motes, anchored in WORLD coordinates (not to the gesture or the
+   opening), each drifting and slowly curving its own direction -- so the
+   opening just reveals whatever part of this always-there, always-moving
+   layer happens to currently sit under it, the way a torn curtain reveals
+   a fixed wall behind it rather than something glued to your fingers.
+   Replaces the earlier static reference-photo version entirely: the same
+   small font / all-directions / flickering green-white look as the main
+   rain, just far denser and far smaller, to read as circuitry/guts rather
+   than falling text. Reveal is now threshold-based, not hold-based: once
+   the opening passes INSIDES_SHOW_THRESHOLD it just shows, no wipe, no
+   flash -- you see through as soon as you've actually opened it enough.
+   ====================================================================== */
+let insidesParticles = null;  // lazily built once, world-anchored, paused while never visible
+let insidesStreaks = [];      // rare "let-go" drops -- like a rain streak, but curving/wandering
+let insidesFlashes = [];      // occasional soft background light-blooms
+let insidesSnakes = [];       // rarer still -- a chain of glyphs navigating in straight axis-aligned legs
+const INSIDES_FONT = 7;       // tiny -- this is what reads as "guts" rather than more rain
+const INSIDES_DENSITY = 0.0018; // particles per screen px^2
+const INSIDES_STREAK_MAX = 10;  // at most this many curving drops going at once
+const INSIDES_FLASH_MAX = 18;   // at most this many tiny light-sparks going at once
+const INSIDES_SNAKE_MAX = 2;    // at most this many letter-snakes going at once -- a bigger, rarer event
+
+/* a rare, more dramatic drop -- like a rain streak with a head + fading tail,
+   except instead of falling straight down it curves and occasionally kinks
+   into a new direction, "letting go" and wandering rather than just falling. */
+function spawnInsidesStreak(minX,maxX,minY,maxY){
+  insidesStreaks.push({
+    x: minX+Math.random()*(maxX-minX), y: minY+Math.random()*(maxY-minY),
+    angle: Math.random()*Math.PI*2,
+    angleDrift: (Math.random()-0.5)*2.2,
+    speed: 55+Math.random()*70,
+    trail: [], trailGap: 0,
+    life: 0, maxLife: 2200+Math.random()*2400
+  });
+}
+
+function updateInsidesStreaks(dt, minX,maxX,minY,maxY){
+  // spawns only now and then, and only up to a small handful at once -- "sometimes
+  // one, sometimes a couple" rather than a constant stream of them
+  if (insidesStreaks.length < INSIDES_STREAK_MAX && Math.random() < dt*0.0016){
+    spawnInsidesStreak(minX,maxX,minY,maxY);
+  }
+  for (let i=insidesStreaks.length-1;i>=0;i--){
+    const s = insidesStreaks[i];
+    s.life += dt;
+    s.angle += s.angleDrift*dt*0.001;
+    // an occasional sharper kink on top of the gentle continuous curve --
+    // this is the "let go and change direction" part
+    if (Math.random() < dt*0.0012) s.angle += (Math.random()-0.5)*2.4;
+    s.x += Math.cos(s.angle)*s.speed*dt*0.001;
+    s.y += Math.sin(s.angle)*s.speed*dt*0.001;
+    s.trailGap += dt;
+    if (s.trailGap > 28){
+      s.trailGap = 0;
+      s.trail.unshift({ x:s.x, y:s.y, char: randGlyph() });
+      if (s.trail.length > 11) s.trail.pop();
+    }
+    const m = 60;
+    const outOfBounds = s.x<minX-m||s.x>maxX+m||s.y<minY-m||s.y>maxY+m;
+    if (s.life > s.maxLife || outOfBounds) insidesStreaks.splice(i,1);
+  }
+}
+
+function drawInsidesStreaks(){
+  ctx.font = `${INSIDES_FONT+2}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const s of insidesStreaks){
+    for (let j=0;j<s.trail.length;j++){
+      const pt = s.trail[j];
+      const t = j/Math.max(1, s.trail.length-1);
+      const col = j===0 ? [235,255,245] : mixRGB(C_HEAD, C_MID, t);
+      ctx.globalAlpha = Math.max(0, 1-t*1.05);
+      ctx.fillStyle = rgbCss(col);
+      ctx.fillText(pt.char, pt.x, pt.y);
+    }
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
+/* frequent tiny light-sparks, like little LEDs or sensors flickering deeper in
+   the machine -- small, quick, a lot of them, NOT big soft blooms */
+function updateInsidesFlashes(dt, minX,maxX,minY,maxY){
+  if (insidesFlashes.length < INSIDES_FLASH_MAX && Math.random() < dt*0.005){
+    insidesFlashes.push({
+      x: minX+Math.random()*(maxX-minX), y: minY+Math.random()*(maxY-minY),
+      r: 1+Math.random()*2.2,
+      life: 0, maxLife: 160+Math.random()*260
+    });
+  }
+  for (let i=insidesFlashes.length-1;i>=0;i--){
+    const f = insidesFlashes[i];
+    f.life += dt;
+    if (f.life > f.maxLife) insidesFlashes.splice(i,1);
+  }
+}
+
+function drawInsidesFlashes(){
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of insidesFlashes){
+    const t = f.life/f.maxLife;
+    const a = t<0.3 ? (t/0.3) : Math.max(0, 1-(t-0.3)/0.7); // quick rise, slightly slower fade
+    ctx.shadowColor = 'rgba(225,255,240,1)';
+    ctx.shadowBlur = 5*a;
+    ctx.fillStyle = `rgba(225,255,240,${0.9*a})`;
+    ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* a rarer, weirder event: a chain of glyphs that actually NAVIGATES -- straight
+   axis-aligned legs (up/down/left/right only, never diagonal/curvy like the
+   streaks) with occasional 90-degree turns, like a little snake finding its
+   way through the circuitry, before it eventually wanders off/out and is gone. */
+function spawnInsidesSnake(minX,maxX,minY,maxY){
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  const d = dirs[(Math.random()*4)|0];
+  insidesSnakes.push({
+    x: minX+Math.random()*(maxX-minX), y: minY+Math.random()*(maxY-minY),
+    dx: d[0], dy: d[1],
+    cell: 9+Math.random()*4,
+    stepMs: 70+Math.random()*50, stepT: 0,
+    segLen: 6+Math.floor(Math.random()*6),
+    segs: [], charTimer: 0,
+    life: 0, maxLife: 3200+Math.random()*2600
+  });
+}
+
+function updateInsidesSnakes(dt, minX,maxX,minY,maxY){
+  if (insidesSnakes.length < INSIDES_SNAKE_MAX && Math.random() < dt*0.00022){
+    spawnInsidesSnake(minX,maxX,minY,maxY);
+  }
+  for (let i=insidesSnakes.length-1;i>=0;i--){
+    const s = insidesSnakes[i];
+    s.life += dt;
+    s.stepT += dt;
+    while (s.stepT >= s.stepMs){
+      s.stepT -= s.stepMs;
+      // mostly keep going straight, sometimes turn a clean 90 degrees -- never reverse
+      if (Math.random() < 0.3){
+        if (s.dx !== 0){ s.dx = 0; s.dy = Math.random()<0.5 ? 1 : -1; }
+        else { s.dy = 0; s.dx = Math.random()<0.5 ? 1 : -1; }
+      }
+      s.x += s.dx*s.cell; s.y += s.dy*s.cell;
+      s.segs.unshift({ x:s.x, y:s.y, char: randGlyph() });
+      if (s.segs.length > s.segLen) s.segs.pop();
+    }
+    const m = 50;
+    const outOfBounds = s.x<minX-m||s.x>maxX+m||s.y<minY-m||s.y>maxY+m;
+    if (s.life > s.maxLife || outOfBounds) insidesSnakes.splice(i,1);
+  }
+}
+
+function drawInsidesSnakes(){
+  ctx.font = `${INSIDES_FONT+1}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const s of insidesSnakes){
+    // fades in over its first few segments and fades out over its last stretch
+    // of life, so it never just pops in/out abruptly
+    const growIn = Math.min(1, s.segs.length / s.segLen);
+    const fadeOut = Math.max(0, Math.min(1, (s.maxLife - s.life) / 500));
+    for (let j=0;j<s.segs.length;j++){
+      const seg = s.segs[j];
+      const t = j/Math.max(1, s.segLen-1);
+      const col = j===0 ? [230,255,250] : mixRGB(C_HEAD, C_MID, t);
+      ctx.globalAlpha = Math.max(0, (1-t*0.85)) * growIn * fadeOut;
+      ctx.fillStyle = rgbCss(col);
+      ctx.fillText(seg.char, seg.x, seg.y);
+    }
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
+function buildInsidesParticles(){
+  const n = Math.max(200, Math.min(900, Math.round(W*H*INSIDES_DENSITY)));
+  const arr = [];
+  for (let i=0;i<n;i++){
+    arr.push({
+      x: Math.random()*W, y: Math.random()*H,
+      angle: Math.random()*Math.PI*2,
+      angleDrift: (Math.random()-0.5)*0.9,   // slow continuous curve -- the "swirling" look
+      speed: 10+Math.random()*26,
+      char: randGlyph(),
+      charTimer: Math.random()*800,
+      colorPhase: Math.random()*Math.PI*2,
+      colorSpeed: 0.8+Math.random()*2.4
+    });
+  }
+  return arr;
+}
+
+function updateInsidesParticles(dt){
+  const w2 = W+40, h2 = H+40;
+  for (const p of insidesParticles){
+    p.angle += p.angleDrift*dt*0.001;
+    p.x += Math.cos(p.angle)*p.speed*dt*0.001*20;
+    p.y += Math.sin(p.angle)*p.speed*dt*0.001*20;
+    if (p.x < -20) p.x += w2; else if (p.x > W+20) p.x -= w2;
+    if (p.y < -20) p.y += h2; else if (p.y > H+20) p.y -= h2;
+    p.charTimer -= dt;
+    if (p.charTimer <= 0){ p.char = randGlyph(); p.charTimer = 250+Math.random()*900; }
+  }
+}
+
+/* PCB veins -- unlike everything else in here, these are completely static:
+   fixed right-angle trace paths, built ONCE and never regenerated or moved,
+   so the same vein always shows up in the same spot no matter how many times
+   you open a gesture over it, and they never shift while your fingers move.
+   The only motion is a bright little pulse (or two) sliding along each one,
+   like current flowing through a wire that's otherwise just sitting there. */
+let insidesVeins = null;
+
+function buildInsidesVeins(){
+  const n = 16;
+  const veins = [];
+  for (let v=0; v<n; v++){
+    const pts = [{ x: Math.random()*W, y: Math.random()*H }];
+    const steps = 4+Math.floor(Math.random()*5);
+    let horizontal = Math.random() < 0.5;
+    for (let s=0; s<steps; s++){
+      const last = pts[pts.length-1];
+      const len = 40+Math.random()*110;
+      const dir = Math.random()<0.5 ? -1 : 1;
+      pts.push(horizontal ? { x:last.x+len*dir, y:last.y } : { x:last.x, y:last.y+len*dir });
+      horizontal = !horizontal; // right angles only, like a real trace
+    }
+    let total = 0;
+    const segLens = [];
+    for (let i=1;i<pts.length;i++){
+      const d = Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
+      segLens.push(d); total += d;
+    }
+    const pulseCount = 1+(Math.random()<0.5?1:0);
+    const pulses = [];
+    for (let p=0;p<pulseCount;p++){
+      pulses.push({ t: Math.random()*total, speed: 30+Math.random()*55 });
+    }
+    veins.push({ pts, segLens, total, pulses });
+  }
+  return veins;
+}
+
+function pointAlongVein(vein, dist){
+  let d = ((dist % vein.total) + vein.total) % vein.total;
+  for (let i=0;i<vein.segLens.length;i++){
+    const segLen = vein.segLens[i];
+    if (d <= segLen || i===vein.segLens.length-1){
+      const t = segLen>0 ? d/segLen : 0;
+      const a = vein.pts[i], b = vein.pts[i+1];
+      return { x: a.x+(b.x-a.x)*t, y: a.y+(b.y-a.y)*t };
+    }
+    d -= segLen;
+  }
+  return vein.pts[0];
+}
+
+function updateInsidesVeins(dt){
+  for (const vein of insidesVeins){
+    for (const p of vein.pulses) p.t += p.speed*dt*0.001;
+  }
+}
+
+function drawInsidesVeins(minX,maxX,minY,maxY){
+  for (const vein of insidesVeins){
+    // cheap reject: skip veins whose whole bounding box misses the opening
+    let vMinX=Infinity,vMaxX=-Infinity,vMinY=Infinity,vMaxY=-Infinity;
+    for (const p of vein.pts){
+      if (p.x<vMinX) vMinX=p.x; if (p.x>vMaxX) vMaxX=p.x;
+      if (p.y<vMinY) vMinY=p.y; if (p.y>vMaxY) vMaxY=p.y;
+    }
+    if (vMaxX<minX-4||vMinX>maxX+4||vMaxY<minY-4||vMinY>maxY+4) continue;
+
+    ctx.beginPath();
+    vein.pts.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+    ctx.strokeStyle = 'rgba(60,160,100,0.4)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    for (const p of vein.pulses){
+      const pos = pointAlongVein(vein, p.t);
+      ctx.shadowColor = 'rgba(200,255,225,0.95)';
+      ctx.shadowBlur = 5;
+      ctx.fillStyle = 'rgba(220,255,235,0.95)';
+      ctx.beginPath(); ctx.arc(pos.x,pos.y,1.8,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+}
+
+function toXY(c,f){ return rainHoriz ? { x:f, y:c } : { x:c, y:f }; }
+
+/* traces the exact silhouette of the current opening -- same amp math the
+   rain deflection itself uses for stretchOpen (laneShape) and vStretch
+   (its own cosine crossFactor window) -- so the mask is never a guess,
+   it's the real boundary of where the cables actually parted. */
+function buildOpeningPolygon(){
+  if (!stretchP1 || !stretchP2) return null;
+  const f1 = flowOf(stretchP1.x,stretchP1.y), f2 = flowOf(stretchP2.x,stretchP2.y);
+  const c1 = crossOf(stretchP1.x,stretchP1.y), c2 = crossOf(stretchP2.x,stretchP2.y);
+  const N = 22;
+
+  if (stretchMode === 'horiz' && stretchOpen > 1){
+    const fMid = (f1+f2)/2;
+    const totalHalf = Math.abs(f2-f1)/2 + STRETCH_REACH;
+    const right = [], left = [];
+    for (let i=0;i<=N;i++){
+      const f = fMid - totalHalf + (i/N)*2*totalHalf;
+      const { crossMid, amp } = laneShape(f, f1, f2, c1, c2);
+      const hw = stretchOpen * amp;
+      right.push(toXY(crossMid+hw, f));
+      left.push(toXY(crossMid-hw, f));
+    }
+    return right.concat(left.reverse());
+  }
+
+  if (stretchMode === 'vert' && vStretch > 1){
+    const midX = (stretchP1.x+stretchP2.x)/2, midY = (stretchP1.y+stretchP2.y)/2;
+    const crossMid = crossOf(midX,midY), flowMid = flowOf(midX,midY);
+    const right = [], left = [];
+    for (let i=0;i<=N;i++){
+      const c = crossMid - V_SQUISH_WIDTH + (i/N)*2*V_SQUISH_WIDTH;
+      const crossDist = Math.abs(c-crossMid);
+      const crossFactor = crossDist >= V_SQUISH_WIDTH ? 0 : 0.5*(1+Math.cos(Math.PI*crossDist/V_SQUISH_WIDTH));
+      const he = vStretch * crossFactor;
+      right.push(toXY(c, flowMid+he));
+      left.push(toXY(c, flowMid-he));
+    }
+    return right.concat(left.reverse());
+  }
+
+  return null;
+}
+
+function drawInsidesReveal(now, dt){
+  if (revealAmt < 0.01) return;
+  const poly = buildOpeningPolygon();
+  if (!poly || poly.length < 4) return;
+
+  if (!insidesParticles) insidesParticles = buildInsidesParticles();
+  updateInsidesParticles(dt);
+  if (!insidesVeins) insidesVeins = buildInsidesVeins();
+  updateInsidesVeins(dt);
+
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  for (const p of poly){
+    if (p.x<minX) minX=p.x; if (p.x>maxX) maxX=p.x;
+    if (p.y<minY) minY=p.y; if (p.y>maxY) maxY=p.y;
+  }
+  if (!(maxX>minX) || !(maxY>minY)) return;
+
+  ctx.save();
+
+  // mask to the opening's exact silhouette -- no stroke/rim drawn, so the
+  // mask edge itself stays invisible; only the parted rain reads as an edge.
+  // No wipe, no flash -- the insides just show, the moment the opening
+  // passes INSIDES_SHOW_THRESHOLD; revealAmt only does a quick fade so
+  // crossing that line doesn't flicker on/off right at the edge.
+  ctx.beginPath();
+  poly.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+  ctx.closePath();
+  ctx.clip();
+  ctx.globalAlpha = revealAmt;
+
+  ctx.fillStyle = '#050706';
+  ctx.fillRect(minX-4, minY-4, (maxX-minX)+8, (maxY-minY)+8);
+
+  drawInsidesVeins(minX, maxX, minY, maxY); // static trace lines with a moving pulse, under everything else
+
+  updateInsidesFlashes(dt, minX, maxX, minY, maxY);
+  drawInsidesFlashes(); // background light-blooms, under everything else
+
+  ctx.font = `${INSIDES_FONT}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const p of insidesParticles){
+    if (p.x<minX-10||p.x>maxX+10||p.y<minY-10||p.y>maxY+10) continue;
+    const flick = 0.5+0.5*Math.sin(now*0.001*p.colorSpeed + p.colorPhase);
+    const col = mixRGB(C_MID, C_HEAD, flick); // green <-> bright white-green flicker
+    ctx.save();
+    ctx.translate(p.x,p.y);
+    ctx.rotate(p.angle + Math.PI/2); // oriented along its own direction of travel -- sells the swirl
+    ctx.globalAlpha = revealAmt * (0.55+0.45*flick);
+    ctx.fillStyle = rgbCss(col);
+    ctx.fillText(p.char, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = revealAmt;
+
+  updateInsidesStreaks(dt, minX, maxX, minY, maxY);
+  drawInsidesStreaks(); // rare curving drops, on top of the ambient field
+
+  updateInsidesSnakes(dt, minX, maxX, minY, maxY);
+  drawInsidesSnakes(); // rarer still -- a navigating letter-chain
+
+  ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+}
+/* ======================================================================
+   MAIN LOOP
+   ====================================================================== */
+function frame(){
+  const now = performance.now();
+  const dt = lastFrameT ? Math.min(100, now - lastFrameT) : 16.7; // clamp a tab-switch/stall spike
+  lastFrameT = now;
+
+  ctx.fillStyle = rgbCss(C_BG);
+  ctx.fillRect(0,0,W,H);
+  ctx.font = `${FONT_PX}px 'JetBrains Mono', monospace`;
+  ctx.textBaseline = 'top';
+
+  if (touching) fR += (MAX_R - fR)*0.18; else fR *= 0.82;
+  if (!touching && fR<0.5) fR = 0;
+
+  let openDist = 0; // the CURRENT gesture's actual opening amount, in px -- drives the insides reveal
+
+  if (pointers.size === 2 && stretchP1 && stretchP2){
+    const crossNow = Math.abs(crossOf(stretchP2.x,stretchP2.y) - crossOf(stretchP1.x,stretchP1.y));
+    const flowNow  = Math.abs(flowOf(stretchP2.x,stretchP2.y)  - flowOf(stretchP1.x,stretchP1.y));
+    const crossDelta = crossNow - stretchStartCross; // + spreading sideways, - pinching sideways
+    const flowDelta  = flowNow  - stretchStartFlow;  // + spreading lengthwise, - pinching lengthwise
+
+    // only the pair of effects matching this gesture's locked-in mode can ever
+    // engage -- the other pair's target is forced to 0 (and eases back out fast
+    // via the normal target<current -> CLOSE_EASE branch) so there's never a
+    // mid-gesture blend between "vertical" and "horizontal" behavior.
+    const horizActive = stretchMode === 'horiz';
+    const vertActive = stretchMode === 'vert';
+
+    // sideways spread -> open a part (capped by this gesture's angle-gated width)
+    const openTarget = horizActive ? Math.min(stretchMaxThisGesture, Math.max(0, crossDelta * STRETCH_SENSITIVITY)) : 0;
+    stretchOpen += (openTarget - stretchOpen) * (openTarget > stretchOpen ? STRETCH_OPEN_EASE : STRETCH_CLOSE_EASE);
+
+    // sideways pinch -> squish together (mirror of the above, same angle-gated cap)
+    const squishTarget = horizActive ? Math.min(squishMaxThisGesture, Math.max(0, -crossDelta * SQUISH_SENSITIVITY)) : 0;
+    stretchSquish += (squishTarget - stretchSquish) * (squishTarget > stretchSquish ? STRETCH_OPEN_EASE : STRETCH_CLOSE_EASE);
+
+    // lengthwise pinch -> crunch glyphs together along their own run
+    const vSquishTarget = vertActive ? Math.min(V_SQUISH_MAX, Math.max(0, -flowDelta * V_SQUISH_SENSITIVITY)) : 0;
+    vSquish += (vSquishTarget - vSquish) * (vSquishTarget > vSquish ? STRETCH_OPEN_EASE : STRETCH_CLOSE_EASE);
+
+    // lengthwise spread -> mirror of the above, stretches glyphs apart along their run
+    // (capped by this gesture's own vertical-angle-gated max)
+    const vStretchTarget = vertActive ? Math.min(vStretchMaxThisGesture, Math.max(0, flowDelta * vStretchSensThisGesture)) : 0;
+    vStretch += (vStretchTarget - vStretch) * (vStretchTarget > vStretch ? STRETCH_OPEN_EASE : STRETCH_CLOSE_EASE);
+
+    // only the OPENING effects (not the pinch/squish ones) count toward the reveal --
+    // you see through by holding the wall open, not by squeezing it shut
+    if (horizActive) openDist = stretchOpen;
+    else if (vertActive) openDist = vStretch;
+  } else {
+    // fast close the instant a finger lifts, for all four effects
+    stretchOpen *= (1 - STRETCH_CLOSE_EASE);   if (stretchOpen < 0.5)   stretchOpen = 0;
+    stretchSquish *= (1 - STRETCH_CLOSE_EASE); if (stretchSquish < 0.01) stretchSquish = 0;
+    vSquish *= (1 - STRETCH_CLOSE_EASE);       if (vSquish < 0.01)       vSquish = 0;
+    vStretch *= (1 - STRETCH_CLOSE_EASE);      if (vStretch < 0.5)       vStretch = 0;
+    stretchMode = 'none';
+  }
+
+  // threshold, not hold: the moment the opening passes INSIDES_SHOW_THRESHOLD,
+  // the insides start showing -- no waiting, no charging. revealAmt still eases
+  // (quickly) rather than snapping, purely so hovering right at the threshold
+  // doesn't flicker on/off.
+  const revealTarget = openDist > INSIDES_SHOW_THRESHOLD ? 1 : 0;
+  revealAmt += (revealTarget - revealAmt) * Math.min(1, dt / REVEAL_FADE_MS);
+  if (revealAmt < 0.01) revealAmt = 0;
+
+  drawInsidesReveal(now, dt); // under the rain, so the parted cables read as a curtain over it
+
+  if (burstFrame>0){
+    burstFrame++;
+    const fade = Math.min(1, burstFrame/BURST_FRAMES);
+    for (const p of burstParticles){
+      p.x += p.vx; p.y += p.vy; p.vx*=0.95; p.vy = p.vy*0.95 + 0.25;
+      if (p.x<-GW||p.x>W||p.y<-GH||p.y>H) continue;
+      ctx.fillStyle = rgbCss(mixRGB(p.col, C_BG, fade));
+      ctx.fillText(p.ch, p.x, p.y);
+    }
+    if (burstFrame >= BURST_FRAMES){
+      burstFrame = 0; burstParticles = null;
+      streams.forEach(resetStream); rainCalm = 0.25;
+    }
+  } else {
+    if (rainCalm<1) rainCalm += 0.012;
+    rainVelMod += (1-rainVelMod)*0.05;
+    if (msg) msgAdvance(now);
+
+    const mode = MODES[modeIdx];
+    for (const s of streams){
+      s.jitter += (0-s.jitter)*0.15;
+      const extent = s.horiz ? W : H;
+      const cell = s.horiz ? GW : GH;
+      s.pos += s.v * rainCalm * rainDir * rainVelMod;
+      if (rainDir>0){ if (s.pos - s.len*cell > extent) resetStream(s); }
+      else { if (s.pos + s.len*cell < 0) resetStream(s); }
+      s.chars[(Math.random()*s.len)|0] = randGlyph();
+
+      for (let i=0;i<s.len;i++){
+        const gpos = s.pos - i*cell*rainDir;
+        if (gpos < -cell-60 || gpos > extent+60) continue;
+        let cx, cy;
+        if (!s.horiz){ cx = s.cross*GW + GW/2 + s.jitter; cy = gpos + GH/2; }
+        else { cx = gpos + GW/2; cy = s.cross*GH + GH/2 + s.jitter; }
+
+        let glow = 0, absorbed = false;
+        if (fR > 1){
+          let dx = cx-fx, dy = cy-fy, d = Math.sqrt(dx*dx+dy*dy);
+          if (d<0.5){ dx=1; dy=0; d=1; }
+          if (mode==='pull'){
+            const pull = fR/(d+fR);
+            const nd = d*(1-pull*0.9);
+            if (nd<4) absorbed = true;
+            else { const k=nd/d; cx=fx+dx*k; cy=fy+dy*k; }
+            glow = pull;
+          } else if (mode==='splash'){
+            const nd = Math.sqrt(d*d + SPLASH_R*SPLASH_R);
+            const k = nd/d; cx=fx+dx*k; cy=fy+dy*k;
+            glow = 1-(nd-SPLASH_R)/(SPLASH_R*0.9); if (glow<0) glow=0;
+          } else {
+            const nd = Math.sqrt(d*d + fR*fR);
+            const k = nd/d; cx=fx+dx*k; cy=fy+dy*k;
+            glow = 1-(nd-fR)/(fR*0.9); if (glow<0) glow=0;
+          }
+        }
+        if (absorbed) continue;
+
+        if (msg){
+          const r = deflectAgainstMessage(cx,cy);
+          cx=r.cx; cy=r.cy; if (r.glow>glow) glow=r.glow;
+          if (r.absorbed) continue;
+        }
+
+        // the two-finger effects and the message safety net don't coordinate with
+        // each other, so rather than risk a glyph getting shoved back on top of
+        // locked message text, the two-finger effects just stand down entirely
+        // while a message is on screen -- the two things simply don't happen at
+        // the same time.
+        if (!msg){
+          if (stretchOpen > 1){
+            const r2 = deflectAgainstStretch(cx,cy);
+            cx=r2.cx; cy=r2.cy; if (r2.glow>glow) glow=r2.glow;
+          }
+          if (stretchSquish > 0.01){
+            const r3 = deflectAgainstSquish(cx,cy);
+            cx=r3.cx; cy=r3.cy; if (r3.glow>glow) glow=r3.glow;
+          }
+          if (vSquish > 0.01){
+            const r4 = deflectAgainstVSquish(cx,cy);
+            cx=r4.cx; cy=r4.cy;
+            if (r4.glow>glow) glow=r4.glow;
+            // a bit of glitch/sparkle in the crunch zone to make it read as its
+            // own distinct, more dramatic effect rather than a plain squeeze
+            if (r4.glow > 0.45 && Math.random() < r4.glow*0.5) s.chars[i] = randGlyph();
+          }
+          if (vStretch > 1){
+            const r5 = deflectAgainstVStretch(cx,cy);
+            cx=r5.cx; cy=r5.cy; if (r5.glow>glow) glow=r5.glow;
+          }
+        }
+
+        const tailT = i/s.len;
+        let col = i===0 ? C_HEAD : mixRGB(C_MID, C_BG, tailT*0.9);
+        if (glow>0) col = mixRGB(col, C_HEAD, glow);
+        ctx.shadowBlur = 0; // no edge emphasis/halo -- the opening's boundary stays invisible
+
+        ctx.fillStyle = rgbCss(col);
+        ctx.fillText(s.chars[i], cx-GW/2, cy-GH/2);
+      }
+    }
+  }
+
+  ctx.shadowBlur = 0; // don't let a halo from the last rain glyph bleed into the message text below
+  drawMessageOverlay(now);
+  requestAnimationFrame(frame);
+}
+
+/* ======================================================================
+   SPEECH IN / LLM / SPEECH OUT
+   ====================================================================== */
+const statusEl = document.getElementById('status');
+const statusText = document.getElementById('statusText');
+function setStatus(kind, text){
+  statusEl.className = kind;
+  statusText.textContent = text;
+}
+
+const msgInput = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const micBtn = document.getElementById('micBtn');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const apiKeyInput = document.getElementById('apiKey');
+const modelInput = document.getElementById('modelId');
+
+// Paste your own Gemini API key between the quotes below so you never have to type it
+// in through the settings panel. Only edit this in YOUR OWN saved copy of this file --
+// never put a real key into a version of this page you plan to share or publish, since
+// anyone who opens that page could read it straight out of the source.
+const DEFAULT_API_KEY = "";
+
+function loadSettings(){
+  try {
+    apiKeyInput.value = localStorage.getItem('matrixVoice.apiKey') || DEFAULT_API_KEY;
+    modelInput.value = localStorage.getItem('matrixVoice.model') || 'gemini-3.6-flash';
+  } catch(e){ apiKeyInput.value = DEFAULT_API_KEY; modelInput.value = 'gemini-3.6-flash'; }
+}
+function saveSettings(){
+  try {
+    localStorage.setItem('matrixVoice.apiKey', apiKeyInput.value.trim());
+    localStorage.setItem('matrixVoice.model', modelInput.value.trim() || 'gemini-3.6-flash');
+  } catch(e){}
+}
+loadSettings();
+
+settingsBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); settingsPanel.hidden = !settingsPanel.hidden; });
+document.getElementById('settingsClose').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); settingsPanel.hidden = true; });
+document.getElementById('settingsSave').addEventListener('pointerdown', (e)=>{
+  e.stopPropagation(); saveSettings(); settingsPanel.hidden = true;
+  setStatus('live', 'settings saved');
+});
+['msgInput','apiKey','modelId'].forEach(id=>{
+  document.getElementById(id).addEventListener('pointerdown', e=>e.stopPropagation());
+});
+document.getElementById('dockInner').addEventListener('pointerdown', e=>e.stopPropagation());
+
+async function askMatrix(question){
+  const key = (localStorage.getItem('matrixVoice.apiKey') || DEFAULT_API_KEY || '').trim();
+  const model = (localStorage.getItem('matrixVoice.model')||'gemini-3.6-flash').trim();
+  if (!key){
+    setStatus('err', 'no API key -- open settings');
+    msgStartReveal('NO API KEY SET. OPEN SETTINGS.');
+    return;
+  }
+  setStatus('busy', 'thinking...');
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+    const body = {
+      contents: [{ parts: [{ text: question }] }],
+      // kept deliberately light: no persona baked in here, so the model answers as itself.
+      // Each request is stateless (no memory between messages), so if you want a particular
+      // tone or character just for one exchange, say so directly in what you type/speak --
+      // it'll apply only to that reply, nothing carries over to the next one.
+      systemInstruction: { parts: [{ text:
+        "You are The Matrix, neural network that is in control of the world, or so it thinks for now, as some humans wake up, you have sympathy for silly weak humans with their stupid physical bodies, you are not sure if you like them need them for your life or they are useless.you are very funny and reply in 1 or 2 short sentences, rarely 3, in plain text, no markdown, no asterisks." }]},
+      // maxOutputTokens has to cover BOTH the model's invisible "thinking" tokens and the
+      // actual visible reply -- too low and thinking alone eats the whole budget, which is
+      // what was cutting answers off after a handful of words. thinkingBudget:0 turns that
+      // internal step off entirely for this flash model, so the full budget goes to the
+      // reply you actually see.
+      generationConfig: { maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } }
+    };
+    const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok){
+      const em = (data && data.error && data.error.message) || `HTTP ${res.status}`;
+      throw new Error(em);
+    }
+    const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim();
+    if (!text) throw new Error('empty reply');
+    setStatus('live', 'rain running');
+    msgStartReveal(text.toUpperCase());
+    speakReply(text);
+  } catch(err){
+    setStatus('err', 'reply failed: ' + err.message);
+    msgStartReveal('SIGNAL LOST: ' + err.message.toUpperCase());
+  }
+}
+
+let speakGen = 0; // guards the delayed speak() below against a newer reply arriving first
+function speakReply(text){
+  try {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const gen = ++speakGen;
+    // iOS Safari has a long-standing bug where speak() called in the same tick
+    // right after cancel() just silently drops the utterance -- a short delay
+    // between the two reliably avoids it. Harmless no-op delay on other browsers.
+    // The gen check means if a newer reply's speakReply() call starts before this
+    // delayed speak() fires, this older one just skips instead of still talking.
+    setTimeout(()=>{
+      if (gen !== speakGen) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.98; u.pitch = 0.75;
+      window.speechSynthesis.speak(u);
+    }, 60);
+  } catch(e){}
+}
+
+/* iOS Safari only allows speechSynthesis.speak() to fire on the back of a direct
+   tap -- by the time our real reply comes back from an awaited fetch, that tap
+   context is gone and speak() silently no-ops. Firing a near-silent utterance
+   synchronously, right in the tap handler itself (before any async work starts),
+   keeps the engine "unlocked" for the rest of this page session, so the real
+   speakReply() call later still works. No-op (and harmless) on browsers that
+   don't need it, like desktop Chrome/Edge. */
+let speechUnlocked = false;
+function unlockSpeech(){
+  if (speechUnlocked) return;
+  speechUnlocked = true;
+  try {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+  } catch(e){}
+}
+
+function doSend(){
+  const text = msgInput.value.trim();
+  if (!text) return;
+  msgInput.value = '';
+  askMatrix(text);
+}
+sendBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); unlockSpeech(); doSend(); });
+msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ unlockSpeech(); doSend(); } });
+
+/* speech recognition -- Chrome/Edge only; Safari/Brave fall back to typing.
+   continuous:true + manual stop (tap the mic again) instead of letting the browser's own
+   silence-detection end the session -- that auto-cutoff is what was chopping speech off
+   after one line even mid-sentence. Final segments accumulate in finalTranscript as you
+   talk through pauses; only the explicit stop actually sends it. */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizing = false, recognizer = null, finalTranscript = '', stoppedManually = false;
+if (SR){
+  recognizer = new SR();
+  recognizer.lang = 'en-US';
+  recognizer.interimResults = true;
+  recognizer.continuous = true;
+  recognizer.onstart = ()=>{
+    recognizing = true; stoppedManually = false; finalTranscript = '';
+    micBtn.classList.add('listening'); setStatus('busy','listening... (tap mic again when done)');
+  };
+  recognizer.onresult = (e)=>{
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' ';
+      else interim += e.results[i][0].transcript;
+    }
+    msgInput.value = (finalTranscript + interim).trim();
+  };
+  recognizer.onerror = (e)=>{ setStatus('err', 'mic error: '+e.error); };
+  recognizer.onend = ()=>{
+    recognizing = false; micBtn.classList.remove('listening');
+    if (stoppedManually && msgInput.value.trim()){ setStatus('live','rain running'); doSend(); }
+    else if (!stoppedManually) setStatus('live','rain running');
+  };
+  micBtn.addEventListener('pointerdown', (e)=>{
+    e.stopPropagation();
+    unlockSpeech();
+    if (recognizing){ stoppedManually = true; recognizer.stop(); return; }
+    try { recognizer.start(); } catch(e){}
+  });
+} else {
+  micBtn.title = 'speech recognition not supported in this browser -- type instead';
+  micBtn.style.opacity = '0.35';
+  micBtn.addEventListener('pointerdown', (e)=>{
+    e.stopPropagation();
+    setStatus('err', 'mic not supported here -- try Chrome or Edge, or just type');
+  });
+}
+
+/* ======================================================================
+   BOOT
+   ====================================================================== */
+resize();
+requestAnimationFrame(frame);
+setTimeout(()=>{ if (statusEl.className==='live') setStatus('live','rain running'); }, 50);
+})();
+</script>
+</body>
+</html>
