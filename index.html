@@ -1508,7 +1508,7 @@ const modelInput = document.getElementById('modelId');
 // in through the settings panel. Only edit this in YOUR OWN saved copy of this file --
 // never put a real key into a version of this page you plan to share or publish, since
 // anyone who opens that page could read it straight out of the source.
-const DEFAULT_API_KEY = "AQ.Ab8RN6K8tIdmPTLuapn9ikK9ioPBLJr4SHiFYQt46xNutsoM4A";
+const DEFAULT_API_KEY = "";
 
 function loadSettings(){
   try {
@@ -1588,14 +1588,33 @@ function speakReply(text){
   } catch(e){}
 }
 
+/* iOS Safari only allows speechSynthesis.speak() to fire on the back of a direct
+   tap -- by the time our real reply comes back from an awaited fetch, that tap
+   context is gone and speak() silently no-ops. Firing a near-silent utterance
+   synchronously, right in the tap handler itself (before any async work starts),
+   keeps the engine "unlocked" for the rest of this page session, so the real
+   speakReply() call later still works. No-op (and harmless) on browsers that
+   don't need it, like desktop Chrome/Edge. */
+let speechUnlocked = false;
+function unlockSpeech(){
+  if (speechUnlocked) return;
+  speechUnlocked = true;
+  try {
+    if (!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+  } catch(e){}
+}
+
 function doSend(){
   const text = msgInput.value.trim();
   if (!text) return;
   msgInput.value = '';
   askMatrix(text);
 }
-sendBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); doSend(); });
-msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter') doSend(); });
+sendBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); unlockSpeech(); doSend(); });
+msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ unlockSpeech(); doSend(); } });
 
 /* speech recognition -- Chrome/Edge only; Safari/Brave fall back to typing.
    continuous:true + manual stop (tap the mic again) instead of letting the browser's own
@@ -1629,6 +1648,7 @@ if (SR){
   };
   micBtn.addEventListener('pointerdown', (e)=>{
     e.stopPropagation();
+    unlockSpeech();
     if (recognizing){ stoppedManually = true; recognizer.stop(); return; }
     try { recognizer.start(); } catch(e){}
   });
