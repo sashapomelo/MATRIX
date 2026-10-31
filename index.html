@@ -483,7 +483,7 @@ let revealHoldMs = 0;   // how long the opening has been held near max, resets t
 let revealAmt = 0;      // eased 0..1 visibility of the reveal, fades in slowly, drops out fast
 let lastFrameT = 0;     // for real-elapsed-time hold tracking, independent of frame rate
 const REVEAL_OPEN_FRAC = 0.85; // how close to this gesture's max the opening must be to count as "charging"
-const REVEAL_HOLD_MS = 2000;   // how long it must be held there before the reveal starts
+const REVEAL_HOLD_MS = 0;   // how long it must be held there before the reveal starts
 const REVEAL_FADE_MS = 650;    // drives the left->right wipe sweep -- fast enough to feel sudden, slow enough to actually see it cut across
 
 // cross axis = across the cables (sideways); flow axis = along their run (lengthwise).
