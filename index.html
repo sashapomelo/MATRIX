@@ -479,12 +479,10 @@ const V_STRETCH_REACH = 150;       // how far past the fingertips the stretch op
    to its max for a sustained beat starts revealing something behind the rain.
    Simple placeholder graphic for now, meant to evolve later -- this first pass
    is just about getting the trigger feel and the edge-of-the-opening look right. */
-let revealHoldMs = 0;   // how long the opening has been held near max, resets the moment it isn't
-let revealAmt = 0;      // eased 0..1 visibility of the reveal, fades in slowly, drops out fast
-let lastFrameT = 0;     // for real-elapsed-time hold tracking, independent of frame rate
-const REVEAL_OPEN_FRAC = 0.85; // how close to this gesture's max the opening must be to count as "charging"
-const REVEAL_HOLD_MS = 0;   // how long it must be held there before the reveal starts
-const REVEAL_FADE_MS = 650;    // drives the left->right wipe sweep -- fast enough to feel sudden, slow enough to actually see it cut across
+let revealAmt = 0;      // eased 0..1 visibility of the reveal
+let lastFrameT = 0;     // for real-elapsed-time tracking, independent of frame rate
+const INSIDES_SHOW_THRESHOLD = 18; // px of actual opening/stretch before the insides start showing -- no hold, no wipe, just "open it enough and you can see through"
+const REVEAL_FADE_MS = 180;    // quick fade so crossing the threshold doesn't flicker on/off, but it still reads as "right away"
 
 // cross axis = across the cables (sideways); flow axis = along their run (lengthwise).
 // Both flip automatically with the rain's current orientation (rainHoriz).
@@ -922,20 +920,19 @@ function drawMessageOverlay(now){
    Replaces the earlier static reference-photo version entirely: the same
    small font / all-directions / flickering green-white look as the main
    rain, just far denser and far smaller, to read as circuitry/guts rather
-   than falling text. Reveal is still: 5s hold -> quick flash -> a hard
-   left->right wipe with a glowing cut-line, same as before -- only what's
-   UNDER the cut changed.
+   than falling text. Reveal is now threshold-based, not hold-based: once
+   the opening passes INSIDES_SHOW_THRESHOLD it just shows, no wipe, no
+   flash -- you see through as soon as you've actually opened it enough.
    ====================================================================== */
 let insidesParticles = null;  // lazily built once, world-anchored, paused while never visible
 let insidesStreaks = [];      // rare "let-go" drops -- like a rain streak, but curving/wandering
 let insidesFlashes = [];      // occasional soft background light-blooms
-let revealFlashStart = 0;     // timestamp of the most recent "pop" trigger
-let prevRevealTarget = 0;     // for detecting the 0->1 rising edge that fires the flash
-const REVEAL_FLASH_MS = 320;  // how long the pop flash takes to decay
+let insidesSnakes = [];       // rarer still -- a chain of glyphs navigating in straight axis-aligned legs
 const INSIDES_FONT = 7;       // tiny -- this is what reads as "guts" rather than more rain
-const INSIDES_DENSITY = 0.0032; // particles per screen px^2
-const INSIDES_STREAK_MAX = 6;   // at most this many curving drops going at once
-const INSIDES_FLASH_MAX = 6;    // at most this many tiny light-sparks going at once
+const INSIDES_DENSITY = 0.0018; // particles per screen px^2
+const INSIDES_STREAK_MAX = 10;  // at most this many curving drops going at once
+const INSIDES_FLASH_MAX = 18;   // at most this many tiny light-sparks going at once
+const INSIDES_SNAKE_MAX = 2;    // at most this many letter-snakes going at once -- a bigger, rarer event
 
 /* a rare, more dramatic drop -- like a rain streak with a head + fading tail,
    except instead of falling straight down it curves and occasionally kinks
@@ -954,7 +951,7 @@ function spawnInsidesStreak(minX,maxX,minY,maxY){
 function updateInsidesStreaks(dt, minX,maxX,minY,maxY){
   // spawns only now and then, and only up to a small handful at once -- "sometimes
   // one, sometimes a couple" rather than a constant stream of them
-  if (insidesStreaks.length < INSIDES_STREAK_MAX && Math.random() < dt*0.0007){
+  if (insidesStreaks.length < INSIDES_STREAK_MAX && Math.random() < dt*0.0016){
     spawnInsidesStreak(minX,maxX,minY,maxY);
   }
   for (let i=insidesStreaks.length-1;i>=0;i--){
@@ -997,7 +994,7 @@ function drawInsidesStreaks(){
 /* frequent tiny light-sparks, like little LEDs or sensors flickering deeper in
    the machine -- small, quick, a lot of them, NOT big soft blooms */
 function updateInsidesFlashes(dt, minX,maxX,minY,maxY){
-  if (insidesFlashes.length < INSIDES_FLASH_MAX && Math.random() < dt*0.0014){
+  if (insidesFlashes.length < INSIDES_FLASH_MAX && Math.random() < dt*0.005){
     insidesFlashes.push({
       x: minX+Math.random()*(maxX-minX), y: minY+Math.random()*(maxY-minY),
       r: 1+Math.random()*2.2,
@@ -1023,6 +1020,69 @@ function drawInsidesFlashes(){
     ctx.shadowBlur = 0;
   }
   ctx.globalCompositeOperation = 'source-over';
+}
+
+/* a rarer, weirder event: a chain of glyphs that actually NAVIGATES -- straight
+   axis-aligned legs (up/down/left/right only, never diagonal/curvy like the
+   streaks) with occasional 90-degree turns, like a little snake finding its
+   way through the circuitry, before it eventually wanders off/out and is gone. */
+function spawnInsidesSnake(minX,maxX,minY,maxY){
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  const d = dirs[(Math.random()*4)|0];
+  insidesSnakes.push({
+    x: minX+Math.random()*(maxX-minX), y: minY+Math.random()*(maxY-minY),
+    dx: d[0], dy: d[1],
+    cell: 9+Math.random()*4,
+    stepMs: 70+Math.random()*50, stepT: 0,
+    segLen: 6+Math.floor(Math.random()*6),
+    segs: [], charTimer: 0,
+    life: 0, maxLife: 3200+Math.random()*2600
+  });
+}
+
+function updateInsidesSnakes(dt, minX,maxX,minY,maxY){
+  if (insidesSnakes.length < INSIDES_SNAKE_MAX && Math.random() < dt*0.00022){
+    spawnInsidesSnake(minX,maxX,minY,maxY);
+  }
+  for (let i=insidesSnakes.length-1;i>=0;i--){
+    const s = insidesSnakes[i];
+    s.life += dt;
+    s.stepT += dt;
+    while (s.stepT >= s.stepMs){
+      s.stepT -= s.stepMs;
+      // mostly keep going straight, sometimes turn a clean 90 degrees -- never reverse
+      if (Math.random() < 0.3){
+        if (s.dx !== 0){ s.dx = 0; s.dy = Math.random()<0.5 ? 1 : -1; }
+        else { s.dy = 0; s.dx = Math.random()<0.5 ? 1 : -1; }
+      }
+      s.x += s.dx*s.cell; s.y += s.dy*s.cell;
+      s.segs.unshift({ x:s.x, y:s.y, char: randGlyph() });
+      if (s.segs.length > s.segLen) s.segs.pop();
+    }
+    const m = 50;
+    const outOfBounds = s.x<minX-m||s.x>maxX+m||s.y<minY-m||s.y>maxY+m;
+    if (s.life > s.maxLife || outOfBounds) insidesSnakes.splice(i,1);
+  }
+}
+
+function drawInsidesSnakes(){
+  ctx.font = `${INSIDES_FONT+1}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const s of insidesSnakes){
+    // fades in over its first few segments and fades out over its last stretch
+    // of life, so it never just pops in/out abruptly
+    const growIn = Math.min(1, s.segs.length / s.segLen);
+    const fadeOut = Math.max(0, Math.min(1, (s.maxLife - s.life) / 500));
+    for (let j=0;j<s.segs.length;j++){
+      const seg = s.segs[j];
+      const t = j/Math.max(1, s.segLen-1);
+      const col = j===0 ? [230,255,250] : mixRGB(C_HEAD, C_MID, t);
+      ctx.globalAlpha = Math.max(0, (1-t*0.85)) * growIn * fadeOut;
+      ctx.fillStyle = rgbCss(col);
+      ctx.fillText(seg.char, seg.x, seg.y);
+    }
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
 
 function buildInsidesParticles(){
@@ -1053,6 +1113,91 @@ function updateInsidesParticles(dt){
     if (p.y < -20) p.y += h2; else if (p.y > H+20) p.y -= h2;
     p.charTimer -= dt;
     if (p.charTimer <= 0){ p.char = randGlyph(); p.charTimer = 250+Math.random()*900; }
+  }
+}
+
+/* PCB veins -- unlike everything else in here, these are completely static:
+   fixed right-angle trace paths, built ONCE and never regenerated or moved,
+   so the same vein always shows up in the same spot no matter how many times
+   you open a gesture over it, and they never shift while your fingers move.
+   The only motion is a bright little pulse (or two) sliding along each one,
+   like current flowing through a wire that's otherwise just sitting there. */
+let insidesVeins = null;
+
+function buildInsidesVeins(){
+  const n = 16;
+  const veins = [];
+  for (let v=0; v<n; v++){
+    const pts = [{ x: Math.random()*W, y: Math.random()*H }];
+    const steps = 4+Math.floor(Math.random()*5);
+    let horizontal = Math.random() < 0.5;
+    for (let s=0; s<steps; s++){
+      const last = pts[pts.length-1];
+      const len = 40+Math.random()*110;
+      const dir = Math.random()<0.5 ? -1 : 1;
+      pts.push(horizontal ? { x:last.x+len*dir, y:last.y } : { x:last.x, y:last.y+len*dir });
+      horizontal = !horizontal; // right angles only, like a real trace
+    }
+    let total = 0;
+    const segLens = [];
+    for (let i=1;i<pts.length;i++){
+      const d = Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
+      segLens.push(d); total += d;
+    }
+    const pulseCount = 1+(Math.random()<0.5?1:0);
+    const pulses = [];
+    for (let p=0;p<pulseCount;p++){
+      pulses.push({ t: Math.random()*total, speed: 30+Math.random()*55 });
+    }
+    veins.push({ pts, segLens, total, pulses });
+  }
+  return veins;
+}
+
+function pointAlongVein(vein, dist){
+  let d = ((dist % vein.total) + vein.total) % vein.total;
+  for (let i=0;i<vein.segLens.length;i++){
+    const segLen = vein.segLens[i];
+    if (d <= segLen || i===vein.segLens.length-1){
+      const t = segLen>0 ? d/segLen : 0;
+      const a = vein.pts[i], b = vein.pts[i+1];
+      return { x: a.x+(b.x-a.x)*t, y: a.y+(b.y-a.y)*t };
+    }
+    d -= segLen;
+  }
+  return vein.pts[0];
+}
+
+function updateInsidesVeins(dt){
+  for (const vein of insidesVeins){
+    for (const p of vein.pulses) p.t += p.speed*dt*0.001;
+  }
+}
+
+function drawInsidesVeins(minX,maxX,minY,maxY){
+  for (const vein of insidesVeins){
+    // cheap reject: skip veins whose whole bounding box misses the opening
+    let vMinX=Infinity,vMaxX=-Infinity,vMinY=Infinity,vMaxY=-Infinity;
+    for (const p of vein.pts){
+      if (p.x<vMinX) vMinX=p.x; if (p.x>vMaxX) vMaxX=p.x;
+      if (p.y<vMinY) vMinY=p.y; if (p.y>vMaxY) vMaxY=p.y;
+    }
+    if (vMaxX<minX-4||vMinX>maxX+4||vMaxY<minY-4||vMinY>maxY+4) continue;
+
+    ctx.beginPath();
+    vein.pts.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+    ctx.strokeStyle = 'rgba(60,160,100,0.4)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    for (const p of vein.pulses){
+      const pos = pointAlongVein(vein, p.t);
+      ctx.shadowColor = 'rgba(200,255,225,0.95)';
+      ctx.shadowBlur = 5;
+      ctx.fillStyle = 'rgba(220,255,235,0.95)';
+      ctx.beginPath(); ctx.arc(pos.x,pos.y,1.8,0,Math.PI*2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
   }
 }
 
@@ -1107,6 +1252,8 @@ function drawInsidesReveal(now, dt){
 
   if (!insidesParticles) insidesParticles = buildInsidesParticles();
   updateInsidesParticles(dt);
+  if (!insidesVeins) insidesVeins = buildInsidesVeins();
+  updateInsidesVeins(dt);
 
   let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
   for (const p of poly){
@@ -1115,29 +1262,23 @@ function drawInsidesReveal(now, dt){
   }
   if (!(maxX>minX) || !(maxY>minY)) return;
 
-  const boxW = maxX-minX, boxH = maxY-minY;
-
   ctx.save();
 
   // mask to the opening's exact silhouette -- no stroke/rim drawn, so the
-  // mask edge itself stays invisible; only the parted rain reads as an edge
+  // mask edge itself stays invisible; only the parted rain reads as an edge.
+  // No wipe, no flash -- the insides just show, the moment the opening
+  // passes INSIDES_SHOW_THRESHOLD; revealAmt only does a quick fade so
+  // crossing that line doesn't flicker on/off right at the edge.
   ctx.beginPath();
   poly.forEach((p,i)=> i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
   ctx.closePath();
   ctx.clip();
+  ctx.globalAlpha = revealAmt;
 
-  // wipe front: a hard edge sweeping left->right across the opening as
-  // revealAmt climbs from 0->1 -- the "cut through the skin" look. Left of
-  // the front: the guts layer, wherever it is in world-space right now.
-  // Right of it: still solid black, like the cut hasn't reached there yet.
-  const wipeX = minX + boxW*revealAmt;
   ctx.fillStyle = '#050706';
-  ctx.fillRect(minX-4, minY-4, boxW+8, boxH+8);
+  ctx.fillRect(minX-4, minY-4, (maxX-minX)+8, (maxY-minY)+8);
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(minX-4, minY-4, (wipeX-minX)+4, boxH+8);
-  ctx.clip();
+  drawInsidesVeins(minX, maxX, minY, maxY); // static trace lines with a moving pulse, under everything else
 
   updateInsidesFlashes(dt, minX, maxX, minY, maxY);
   drawInsidesFlashes(); // background light-blooms, under everything else
@@ -1151,38 +1292,20 @@ function drawInsidesReveal(now, dt){
     ctx.save();
     ctx.translate(p.x,p.y);
     ctx.rotate(p.angle + Math.PI/2); // oriented along its own direction of travel -- sells the swirl
-    ctx.globalAlpha = 0.55+0.45*flick;
+    ctx.globalAlpha = revealAmt * (0.55+0.45*flick);
     ctx.fillStyle = rgbCss(col);
     ctx.fillText(p.char, 0, 0);
     ctx.restore();
   }
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = revealAmt;
 
   updateInsidesStreaks(dt, minX, maxX, minY, maxY);
   drawInsidesStreaks(); // rare curving drops, on top of the ambient field
 
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  ctx.restore(); // drop the wipe-rect clip, keep the opening-silhouette clip
+  updateInsidesSnakes(dt, minX, maxX, minY, maxY);
+  drawInsidesSnakes(); // rarer still -- a navigating letter-chain
 
-  // a bright glowing line riding the wipe front itself -- the "cut" happening live.
-  // Right after the hold completes it also carries an extra-hot spark that decays
-  // fast, so the START of the cut has a little punch -- but that punch lives ONLY
-  // on the blade, never as a flash across the whole opening.
-  if (revealAmt < 0.985){
-    const flashElapsed = now - revealFlashStart;
-    const spark = (flashElapsed >= 0 && flashElapsed < REVEAL_FLASH_MS)
-      ? 1 - (flashElapsed/REVEAL_FLASH_MS) : 0;
-    ctx.shadowColor = 'rgba(190,255,235,0.95)';
-    ctx.shadowBlur = 14 + 22*spark;
-    ctx.strokeStyle = `rgba(220,255,240,${0.9+0.1*spark})`;
-    ctx.lineWidth = 2.5 + 3.5*spark;
-    ctx.beginPath();
-    ctx.moveTo(wipeX, minY-4);
-    ctx.lineTo(wipeX, maxY+4);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-
+  ctx.globalAlpha = 1; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
   ctx.restore();
 }
 /* ======================================================================
@@ -1201,7 +1324,7 @@ function frame(){
   if (touching) fR += (MAX_R - fR)*0.18; else fR *= 0.82;
   if (!touching && fR<0.5) fR = 0;
 
-  let activeOpenFrac = 0; // how close the CURRENT gesture's opening effect is to its own max
+  let openDist = 0; // the CURRENT gesture's actual opening amount, in px -- drives the insides reveal
 
   if (pointers.size === 2 && stretchP1 && stretchP2){
     const crossNow = Math.abs(crossOf(stretchP2.x,stretchP2.y) - crossOf(stretchP1.x,stretchP1.y));
@@ -1234,9 +1357,9 @@ function frame(){
     vStretch += (vStretchTarget - vStretch) * (vStretchTarget > vStretch ? STRETCH_OPEN_EASE : STRETCH_CLOSE_EASE);
 
     // only the OPENING effects (not the pinch/squish ones) count toward the reveal --
-    // you earn a look inside by holding the wall open, not by squeezing it shut
-    if (horizActive && stretchMaxThisGesture > 1) activeOpenFrac = stretchOpen / stretchMaxThisGesture;
-    else if (vertActive && vStretchMaxThisGesture > 1) activeOpenFrac = vStretch / vStretchMaxThisGesture;
+    // you see through by holding the wall open, not by squeezing it shut
+    if (horizActive) openDist = stretchOpen;
+    else if (vertActive) openDist = vStretch;
   } else {
     // fast close the instant a finger lifts, for all four effects
     stretchOpen *= (1 - STRETCH_CLOSE_EASE);   if (stretchOpen < 0.5)   stretchOpen = 0;
@@ -1246,17 +1369,12 @@ function frame(){
     stretchMode = 'none';
   }
 
-  // hold-to-charge: the opening has to stay close to its own max, continuously,
-  // for REVEAL_HOLD_MS before anything starts showing through -- dip below that
-  // and the clock resets, same instant-reset spirit as everything else here.
-  if (activeOpenFrac >= REVEAL_OPEN_FRAC) revealHoldMs += dt;
-  else revealHoldMs = 0;
-  const revealTarget = revealHoldMs >= REVEAL_HOLD_MS ? 1 : 0;
-  // the instant the hold completes (0->1 rising edge), fire the pop flash
-  if (revealTarget === 1 && prevRevealTarget === 0) revealFlashStart = now;
-  prevRevealTarget = revealTarget;
-  const revealEase = revealTarget > revealAmt ? (dt / REVEAL_FADE_MS) : STRETCH_CLOSE_EASE;
-  revealAmt += (revealTarget - revealAmt) * Math.min(1, revealEase);
+  // threshold, not hold: the moment the opening passes INSIDES_SHOW_THRESHOLD,
+  // the insides start showing -- no waiting, no charging. revealAmt still eases
+  // (quickly) rather than snapping, purely so hovering right at the threshold
+  // doesn't flicker on/off.
+  const revealTarget = openDist > INSIDES_SHOW_THRESHOLD ? 1 : 0;
+  revealAmt += (revealTarget - revealAmt) * Math.min(1, dt / REVEAL_FADE_MS);
   if (revealAmt < 0.01) revealAmt = 0;
 
   drawInsidesReveal(now, dt); // under the rain, so the parted cables read as a curtain over it
