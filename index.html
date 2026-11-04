@@ -202,6 +202,26 @@
     text-overflow:ellipsis;
     max-width:calc(100vw - 24px);
   }
+
+  /* TEMPORARY -- debug log, see matching HTML comment. Safe to delete later. */
+  #dbgPanel{
+    position:fixed;
+    left:8px; right:8px;
+    bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 92px);
+    max-height:96px;
+    overflow-y:auto;
+    font-size:9px;
+    line-height:1.35;
+    font-family:'JetBrains Mono', monospace;
+    color:#8fffb0;
+    background:rgba(0,10,5,0.78);
+    border:1px solid rgba(100,255,160,0.25);
+    border-radius:4px;
+    padding:4px 6px;
+    white-space:pre-wrap;
+    pointer-events:none;
+    z-index:50;
+  }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -214,6 +234,11 @@
 <div id="status" class="live"><span class="dot"></span><span id="statusText">rain running</span></div>
 
 <div id="hint">hold=push/pull · swipe=steer · 3×tap=burst · 2-finger=stretch/pinch · 5s=reveal</div>
+
+<!-- TEMPORARY debug log -- shows every mic/speech event with a timestamp, kept on
+     screen (not overwritten like the status bar) so it can just be screenshotted.
+     Safe to remove once iOS speech/mic is sorted out. -->
+<div id="dbgPanel"></div>
 
 <div id="settingsPanel" hidden>
   <h3>Matrix Voice</h3>
@@ -1496,6 +1521,22 @@ function setStatus(kind, text){
   statusText.textContent = text;
 }
 
+/* TEMPORARY -- persistent debug log (see #dbgLog in the HTML/CSS above). Unlike
+   setStatus(), lines here never get overwritten, so a whole mic/speech attempt
+   can be read back afterward (or screenshotted) instead of having to catch
+   fast-changing text live. Capped so it can't grow forever. Safe to delete,
+   along with #dbgLog and its CSS, once iOS speech/mic is sorted out. */
+const dbgEl = document.getElementById('dbgPanel');
+let dbgLines = [];
+function dbgLog(msg){
+  try {
+    const t = new Date().toISOString().slice(11,23);
+    dbgLines.push(`[${t}] ${msg}`);
+    if (dbgLines.length > 40) dbgLines.shift();
+    if (dbgEl){ dbgEl.textContent = dbgLines.join('\n'); dbgEl.scrollTop = dbgEl.scrollHeight; }
+  } catch(e){}
+}
+
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
 const micBtn = document.getElementById('micBtn');
@@ -1580,8 +1621,9 @@ async function askMatrix(question){
 
 let speakGen = 0; // guards the delayed speak() below against a newer reply arriving first
 function speakReply(text){
+  dbgLog('speakReply() called, text len ' + text.length);
   try {
-    if (!('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window)){ dbgLog('no speechSynthesis in window'); return; }
     window.speechSynthesis.cancel();
     const gen = ++speakGen;
     // iOS Safari has a long-standing bug where speak() called in the same tick
@@ -1590,22 +1632,24 @@ function speakReply(text){
     // The gen check means if a newer reply's speakReply() call starts before this
     // delayed speak() fires, this older one just skips instead of still talking.
     setTimeout(()=>{
-      if (gen !== speakGen) return;
+      if (gen !== speakGen){ dbgLog('speak() skipped, a newer reply took over'); return; }
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 0.98; u.pitch = 0.75;
       // DIAGNOSTIC -- temporary, so we can actually see what's happening on a
       // device without a cable/Web Inspector hookup. Surfaces real engine
       // errors (not-allowed, synthesis-failed, audio-busy, etc.) and whether
-      // the browser ever reports starting/finishing the utterance at all,
-      // right in the status bar that's already on screen.
-      u.onstart = ()=>{ setStatus('live', 'speech: started'); };
-      u.onend = ()=>{ setStatus('live', 'speech: ended ok'); };
-      u.onerror = (ev)=>{ setStatus('err', 'speech error: ' + (ev.error || 'unknown')); };
+      // the browser ever reports starting/finishing the utterance at all.
+      u.onstart = ()=>{ dbgLog('utterance onstart fired'); setStatus('live', 'speech: started'); };
+      u.onend = ()=>{ dbgLog('utterance onend fired'); setStatus('live', 'speech: ended ok'); };
+      u.onerror = (ev)=>{ dbgLog('utterance onerror: ' + (ev.error || 'unknown')); setStatus('err', 'speech error: ' + (ev.error || 'unknown')); };
       const voiceCount = (window.speechSynthesis.getVoices() || []).length;
+      dbgLog('calling speak(), ' + voiceCount + ' voices available, speaking=' + window.speechSynthesis.speaking + ' pending=' + window.speechSynthesis.pending);
       setStatus('busy', 'speech: speaking now (' + voiceCount + ' voices)');
       window.speechSynthesis.speak(u);
+      dbgLog('speak() returned, speaking=' + window.speechSynthesis.speaking + ' pending=' + window.speechSynthesis.pending);
     }, 60);
   } catch(e){
+    dbgLog('speakReply threw: ' + e.message);
     setStatus('err', 'speech threw: ' + e.message);
   }
 }
@@ -1660,17 +1704,18 @@ if (SR){
   recognizer.onstart = ()=>{
     recognizing = true; stoppedManually = false; finalTranscript = '';
     micBtn.classList.add('listening'); setStatus('busy','listening... (tap mic again when done)');
+    dbgLog('recognizer.onstart');
   };
   // DIAGNOSTIC -- temporary, so we can see exactly where recognition stalls on a
-  // device without a cable/Web Inspector hookup. The LAST status shown before it
-  // gives up is the clue: never gets past "mic: audio started" means the mic
-  // stream opened but nothing reached the recognizer; never even gets that far
-  // means the mic/audio session itself didn't come up.
-  recognizer.onaudiostart = ()=>{ setStatus('busy','mic: audio started'); };
-  recognizer.onsoundstart = ()=>{ setStatus('busy','mic: sound detected'); };
-  recognizer.onspeechstart = ()=>{ setStatus('busy','mic: speech detected'); };
-  recognizer.onspeechend = ()=>{ setStatus('busy','mic: speech ended, processing'); };
-  recognizer.onnomatch = ()=>{ setStatus('err','mic: no match'); };
+  // device without a cable/Web Inspector hookup. The LAST line logged before it
+  // gives up is the clue: never gets past "onstart" means the mic/audio session
+  // itself didn't come up; gets to "onaudiostart" but no further means the mic
+  // stream opened but no sound/speech was ever recognized in it.
+  recognizer.onaudiostart = ()=>{ dbgLog('recognizer.onaudiostart'); setStatus('busy','mic: audio started'); };
+  recognizer.onsoundstart = ()=>{ dbgLog('recognizer.onsoundstart'); setStatus('busy','mic: sound detected'); };
+  recognizer.onspeechstart = ()=>{ dbgLog('recognizer.onspeechstart'); setStatus('busy','mic: speech detected'); };
+  recognizer.onspeechend = ()=>{ dbgLog('recognizer.onspeechend'); setStatus('busy','mic: speech ended, processing'); };
+  recognizer.onnomatch = ()=>{ dbgLog('recognizer.onnomatch'); setStatus('err','mic: no match'); };
   recognizer.onresult = (e)=>{
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++){
@@ -1678,18 +1723,21 @@ if (SR){
       else interim += e.results[i][0].transcript;
     }
     msgInput.value = (finalTranscript + interim).trim();
+    dbgLog('recognizer.onresult: "' + msgInput.value + '"');
   };
-  recognizer.onerror = (e)=>{ setStatus('err', 'mic error: '+e.error); };
+  recognizer.onerror = (e)=>{ dbgLog('recognizer.onerror: ' + e.error); setStatus('err', 'mic error: '+e.error); };
   recognizer.onend = ()=>{
     recognizing = false; micBtn.classList.remove('listening');
+    dbgLog('recognizer.onend');
     if (stoppedManually && msgInput.value.trim()){ setStatus('live','rain running'); doSend(); }
     else if (!stoppedManually) setStatus('live','rain running');
   };
   micBtn.addEventListener('pointerdown', (e)=>{
     e.stopPropagation();
+    dbgLog('mic tapped, recognizing=' + recognizing);
     unlockSpeech();
     if (recognizing){ stoppedManually = true; recognizer.stop(); return; }
-    try { recognizer.start(); } catch(e){}
+    try { recognizer.start(); } catch(e){ dbgLog('recognizer.start() threw: ' + e.message); }
   });
 } else {
   micBtn.title = 'speech recognition not supported in this browser -- type instead';
