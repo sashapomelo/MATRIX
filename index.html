@@ -1643,6 +1643,12 @@ function speakReply(text){
       u.onend = ()=>{ dbgLog('utterance onend fired'); setStatus('live', 'speech: ended ok'); };
       u.onerror = (ev)=>{ dbgLog('utterance onerror: ' + (ev.error || 'unknown')); setStatus('err', 'speech error: ' + (ev.error || 'unknown')); };
       const voiceCount = (window.speechSynthesis.getVoices() || []).length;
+      // iOS Safari can leave the speech engine suspended (accepts speak() calls
+      // with no error, but never actually starts talking) -- resume() right
+      // before speaking is a harmless no-op when it's already active, and the
+      // on-device log showed speak() accepted with zero events ever following,
+      // which is exactly this symptom.
+      try { window.speechSynthesis.resume(); } catch(e){}
       dbgLog('calling speak(), ' + voiceCount + ' voices available, speaking=' + window.speechSynthesis.speaking + ' pending=' + window.speechSynthesis.pending);
       setStatus('busy', 'speech: speaking now (' + voiceCount + ' voices)');
       window.speechSynthesis.speak(u);
@@ -1697,46 +1703,61 @@ msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ unlockSpeech()
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognizing = false, recognizer = null, finalTranscript = '', stoppedManually = false;
 if (SR){
-  recognizer = new SR();
-  recognizer.lang = 'en-US';
-  recognizer.interimResults = true;
-  recognizer.continuous = true;
-  recognizer.onstart = ()=>{
-    recognizing = true; stoppedManually = false; finalTranscript = '';
-    micBtn.classList.add('listening'); setStatus('busy','listening... (tap mic again when done)');
-    dbgLog('recognizer.onstart');
-  };
-  // DIAGNOSTIC -- temporary, so we can see exactly where recognition stalls on a
-  // device without a cable/Web Inspector hookup. The LAST line logged before it
-  // gives up is the clue: never gets past "onstart" means the mic/audio session
-  // itself didn't come up; gets to "onaudiostart" but no further means the mic
-  // stream opened but no sound/speech was ever recognized in it.
-  recognizer.onaudiostart = ()=>{ dbgLog('recognizer.onaudiostart'); setStatus('busy','mic: audio started'); };
-  recognizer.onsoundstart = ()=>{ dbgLog('recognizer.onsoundstart'); setStatus('busy','mic: sound detected'); };
-  recognizer.onspeechstart = ()=>{ dbgLog('recognizer.onspeechstart'); setStatus('busy','mic: speech detected'); };
-  recognizer.onspeechend = ()=>{ dbgLog('recognizer.onspeechend'); setStatus('busy','mic: speech ended, processing'); };
-  recognizer.onnomatch = ()=>{ dbgLog('recognizer.onnomatch'); setStatus('err','mic: no match'); };
-  recognizer.onresult = (e)=>{
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++){
-      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' ';
-      else interim += e.results[i][0].transcript;
-    }
-    msgInput.value = (finalTranscript + interim).trim();
-    dbgLog('recognizer.onresult: "' + msgInput.value + '"');
-  };
-  recognizer.onerror = (e)=>{ dbgLog('recognizer.onerror: ' + e.error); setStatus('err', 'mic error: '+e.error); };
-  recognizer.onend = ()=>{
-    recognizing = false; micBtn.classList.remove('listening');
-    dbgLog('recognizer.onend');
-    if (stoppedManually && msgInput.value.trim()){ setStatus('live','rain running'); doSend(); }
-    else if (!stoppedManually) setStatus('live','rain running');
-  };
+  // iOS Safari: reusing the SAME SpeechRecognition instance across multiple
+  // start()/stop() cycles reliably breaks after the first session -- every
+  // attempt after the first just fires 'aborted' within milliseconds with
+  // nothing recognized (confirmed directly from the on-device debug log: works
+  // once, then 'aborted' every time after). A fresh instance per start() avoids
+  // whatever internal state WebKit is failing to reset between sessions.
+  function createRecognizer(){
+    const r = new SR();
+    r.lang = 'en-US';
+    r.interimResults = true;
+    r.continuous = true;
+    r.onstart = ()=>{
+      recognizing = true; stoppedManually = false; finalTranscript = '';
+      micBtn.classList.add('listening'); setStatus('busy','listening... (tap mic again when done)');
+      dbgLog('recognizer.onstart');
+    };
+    // DIAGNOSTIC -- temporary, so we can see exactly where recognition stalls on a
+    // device without a cable/Web Inspector hookup.
+    r.onaudiostart = ()=>{ dbgLog('recognizer.onaudiostart'); setStatus('busy','mic: audio started'); };
+    r.onsoundstart = ()=>{ dbgLog('recognizer.onsoundstart'); setStatus('busy','mic: sound detected'); };
+    r.onspeechstart = ()=>{ dbgLog('recognizer.onspeechstart'); setStatus('busy','mic: speech detected'); };
+    r.onspeechend = ()=>{ dbgLog('recognizer.onspeechend'); setStatus('busy','mic: speech ended, processing'); };
+    r.onnomatch = ()=>{ dbgLog('recognizer.onnomatch'); setStatus('err','mic: no match'); };
+    r.onresult = (e)=>{
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++){
+        if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript + ' ';
+        else interim += e.results[i][0].transcript;
+      }
+      msgInput.value = (finalTranscript + interim).trim();
+      dbgLog('recognizer.onresult: "' + msgInput.value + '"');
+    };
+    r.onerror = (e)=>{ dbgLog('recognizer.onerror: ' + e.error); setStatus('err', 'mic error: '+e.error); };
+    r.onend = ()=>{
+      recognizing = false; micBtn.classList.remove('listening');
+      dbgLog('recognizer.onend');
+      // iOS Safari: the mic/recognition session taking over the audio hardware
+      // commonly leaves speechSynthesis suspended afterward -- it accepts
+      // speak() calls with no error, but never actually starts talking, until
+      // explicitly resumed. Nudging it the moment recognition ends (there's no
+      // harm calling resume() on an already-active engine, or on browsers that
+      // never needed it) should keep spoken replies working right after a mic turn.
+      try { window.speechSynthesis.resume(); dbgLog('speechSynthesis.resume() after mic session'); } catch(e){}
+      if (stoppedManually && msgInput.value.trim()){ setStatus('live','rain running'); doSend(); }
+      else if (!stoppedManually) setStatus('live','rain running');
+    };
+    return r;
+  }
+  recognizer = createRecognizer();
   micBtn.addEventListener('pointerdown', (e)=>{
     e.stopPropagation();
     dbgLog('mic tapped, recognizing=' + recognizing);
     unlockSpeech();
     if (recognizing){ stoppedManually = true; recognizer.stop(); return; }
+    recognizer = createRecognizer(); // fresh instance every time, see note above
     try { recognizer.start(); } catch(e){ dbgLog('recognizer.start() threw: ' + e.message); }
   });
 } else {
