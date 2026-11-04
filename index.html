@@ -1593,9 +1593,21 @@ function speakReply(text){
       if (gen !== speakGen) return;
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 0.98; u.pitch = 0.75;
+      // DIAGNOSTIC -- temporary, so we can actually see what's happening on a
+      // device without a cable/Web Inspector hookup. Surfaces real engine
+      // errors (not-allowed, synthesis-failed, audio-busy, etc.) and whether
+      // the browser ever reports starting/finishing the utterance at all,
+      // right in the status bar that's already on screen.
+      u.onstart = ()=>{ setStatus('live', 'speech: started'); };
+      u.onend = ()=>{ setStatus('live', 'speech: ended ok'); };
+      u.onerror = (ev)=>{ setStatus('err', 'speech error: ' + (ev.error || 'unknown')); };
+      const voiceCount = (window.speechSynthesis.getVoices() || []).length;
+      setStatus('busy', 'speech: speaking now (' + voiceCount + ' voices)');
       window.speechSynthesis.speak(u);
     }, 60);
-  } catch(e){}
+  } catch(e){
+    setStatus('err', 'speech threw: ' + e.message);
+  }
 }
 
 /* iOS Safari only allows speechSynthesis.speak() to fire on the back of a direct
@@ -1606,30 +1618,16 @@ function speakReply(text){
    speakReply() call later still works. No-op (and harmless) on browsers that
    don't need it, like desktop Chrome/Edge.
 
-   Separately: iOS treats speechSynthesis audio as "ambient", which is exactly
-   the category the physical mute switch / a Focus mode silences -- with no
-   error, it just produces no sound. Actually playing one real <audio> element
-   (even a near-silent one) from the same tap nudges Safari's audio session
-   into a category that ignores the mute switch, and that tends to carry over
-   to the speech synthesis that follows. Belt-and-suspenders fix for the two
-   separate iOS quirks that can each cause "silently does nothing". */
-const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRoQJAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YWAJAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA="; // tiny 0.3s silent WAV, used only to nudge iOS audio session category
+   (A prior attempt also played a looping silent <audio> element to try to work
+   around iOS's mute switch muting speechSynthesis -- backed out. It fought the
+   mic for the audio session and made things worse: recognition and TTS both
+   started failing entirely after the first use. Isolating one variable at a
+   time: just the tap-unlock utterance below, nothing else, until we know for
+   sure whether the mute switch is actually the remaining cause.) */
 let speechUnlocked = false;
-let unlockAudioEl = null;
 function unlockSpeech(){
   if (speechUnlocked) return;
   speechUnlocked = true;
-  try {
-    if (!unlockAudioEl){
-      unlockAudioEl = document.createElement('audio');
-      unlockAudioEl.src = SILENT_AUDIO_DATA_URI;
-      unlockAudioEl.loop = true;
-      unlockAudioEl.volume = 0.01; // genuinely-near-silent, not literally 0 -- some iOS versions
-                                    // treat a fully-zero-volume play() as not real playback
-      unlockAudioEl.setAttribute('playsinline', '');
-    }
-    unlockAudioEl.play().catch(()=>{});
-  } catch(e){}
   try {
     if (!('speechSynthesis' in window)) return;
     const u = new SpeechSynthesisUtterance(' ');
@@ -1662,11 +1660,17 @@ if (SR){
   recognizer.onstart = ()=>{
     recognizing = true; stoppedManually = false; finalTranscript = '';
     micBtn.classList.add('listening'); setStatus('busy','listening... (tap mic again when done)');
-    // the looping near-silent <audio> element (used to keep iOS's audio session
-    // unmuted for spoken replies) fights with the mic for the audio session while
-    // recognition is active -- pause it for the duration of listening, resume once done
-    if (unlockAudioEl) try { unlockAudioEl.pause(); } catch(e){}
   };
+  // DIAGNOSTIC -- temporary, so we can see exactly where recognition stalls on a
+  // device without a cable/Web Inspector hookup. The LAST status shown before it
+  // gives up is the clue: never gets past "mic: audio started" means the mic
+  // stream opened but nothing reached the recognizer; never even gets that far
+  // means the mic/audio session itself didn't come up.
+  recognizer.onaudiostart = ()=>{ setStatus('busy','mic: audio started'); };
+  recognizer.onsoundstart = ()=>{ setStatus('busy','mic: sound detected'); };
+  recognizer.onspeechstart = ()=>{ setStatus('busy','mic: speech detected'); };
+  recognizer.onspeechend = ()=>{ setStatus('busy','mic: speech ended, processing'); };
+  recognizer.onnomatch = ()=>{ setStatus('err','mic: no match'); };
   recognizer.onresult = (e)=>{
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++){
@@ -1678,7 +1682,6 @@ if (SR){
   recognizer.onerror = (e)=>{ setStatus('err', 'mic error: '+e.error); };
   recognizer.onend = ()=>{
     recognizing = false; micBtn.classList.remove('listening');
-    if (unlockAudioEl) try { unlockAudioEl.play().catch(()=>{}); } catch(e){}
     if (stoppedManually && msgInput.value.trim()){ setStatus('live','rain running'); doSend(); }
     else if (!stoppedManually) setStatus('live','rain running');
   };
