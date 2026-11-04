@@ -1604,11 +1604,32 @@ function speakReply(text){
    synchronously, right in the tap handler itself (before any async work starts),
    keeps the engine "unlocked" for the rest of this page session, so the real
    speakReply() call later still works. No-op (and harmless) on browsers that
-   don't need it, like desktop Chrome/Edge. */
+   don't need it, like desktop Chrome/Edge.
+
+   Separately: iOS treats speechSynthesis audio as "ambient", which is exactly
+   the category the physical mute switch / a Focus mode silences -- with no
+   error, it just produces no sound. Actually playing one real <audio> element
+   (even a near-silent one) from the same tap nudges Safari's audio session
+   into a category that ignores the mute switch, and that tends to carry over
+   to the speech synthesis that follows. Belt-and-suspenders fix for the two
+   separate iOS quirks that can each cause "silently does nothing". */
+const SILENT_AUDIO_DATA_URI = "data:audio/wav;base64,UklGRoQJAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YWAJAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA="; // tiny 0.3s silent WAV, used only to nudge iOS audio session category
 let speechUnlocked = false;
+let unlockAudioEl = null;
 function unlockSpeech(){
   if (speechUnlocked) return;
   speechUnlocked = true;
+  try {
+    if (!unlockAudioEl){
+      unlockAudioEl = document.createElement('audio');
+      unlockAudioEl.src = SILENT_AUDIO_DATA_URI;
+      unlockAudioEl.loop = true;
+      unlockAudioEl.volume = 0.01; // genuinely-near-silent, not literally 0 -- some iOS versions
+                                    // treat a fully-zero-volume play() as not real playback
+      unlockAudioEl.setAttribute('playsinline', '');
+    }
+    unlockAudioEl.play().catch(()=>{});
+  } catch(e){}
   try {
     if (!('speechSynthesis' in window)) return;
     const u = new SpeechSynthesisUtterance(' ');
@@ -1641,6 +1662,10 @@ if (SR){
   recognizer.onstart = ()=>{
     recognizing = true; stoppedManually = false; finalTranscript = '';
     micBtn.classList.add('listening'); setStatus('busy','listening... (tap mic again when done)');
+    // the looping near-silent <audio> element (used to keep iOS's audio session
+    // unmuted for spoken replies) fights with the mic for the audio session while
+    // recognition is active -- pause it for the duration of listening, resume once done
+    if (unlockAudioEl) try { unlockAudioEl.pause(); } catch(e){}
   };
   recognizer.onresult = (e)=>{
     let interim = '';
@@ -1653,6 +1678,7 @@ if (SR){
   recognizer.onerror = (e)=>{ setStatus('err', 'mic error: '+e.error); };
   recognizer.onend = ()=>{
     recognizing = false; micBtn.classList.remove('listening');
+    if (unlockAudioEl) try { unlockAudioEl.play().catch(()=>{}); } catch(e){}
     if (stoppedManually && msgInput.value.trim()){ setStatus('live','rain running'); doSend(); }
     else if (!stoppedManually) setStatus('live','rain running');
   };
