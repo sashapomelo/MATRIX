@@ -259,6 +259,7 @@
     <input id="msgInput" type="text" placeholder="Speak or type..." autocomplete="off" spellcheck="false">
     <button class="dockBtn" id="micBtn" title="speak">🎤</button>
     <button class="dockBtn" id="sendBtn" title="send">➤</button>
+    <button class="dockBtn" id="replayBtn" title="hear last reply (tap if it didn't speak automatically)">🔊</button>
     <button class="dockBtn" id="settingsBtn" title="settings">⚙</button>
   </div>
 </div>
@@ -1565,6 +1566,32 @@ function saveSettings(){
 }
 loadSettings();
 
+/* Manual replay -- every automatic speak() attempt after an async fetch (or a
+   mic session) has turned out to silently no-op on this iPhone: speak() is
+   called, speechSynthesis.speaking/pending both read false immediately after,
+   and no onstart/onerror event EVER follows, with or without voices loaded.
+   That's iOS Safari flatly refusing it for being one step too far from a real
+   tap, with no error to show for it. A tap on THIS button is a genuine, direct
+   gesture -- no setTimeout, no prior async work in between -- which iOS does
+   reliably allow, so this is the guaranteed fallback when the automatic one
+   goes silent. */
+document.getElementById('replayBtn').addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+  dbgLog('replay button tapped, lastReplyText len ' + lastReplyText.length);
+  if (!lastReplyText){ setStatus('err', 'no reply to replay yet'); return; }
+  try {
+    if (!('speechSynthesis' in window)){ setStatus('err', 'speech not supported here'); return; }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(lastReplyText);
+    u.rate = 0.98; u.pitch = 0.75;
+    u.onstart = ()=>{ dbgLog('replay: onstart fired'); setStatus('live', 'speech: started'); };
+    u.onend = ()=>{ dbgLog('replay: onend fired'); setStatus('live', 'speech: ended ok'); };
+    u.onerror = (ev)=>{ dbgLog('replay: onerror ' + (ev.error||'unknown')); setStatus('err', 'speech error: ' + (ev.error||'unknown')); };
+    window.speechSynthesis.speak(u);
+    dbgLog('replay: speak() returned, speaking=' + window.speechSynthesis.speaking);
+  } catch(err){ dbgLog('replay threw: ' + err.message); setStatus('err', 'speech threw: ' + err.message); }
+});
+
 settingsBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); settingsPanel.hidden = !settingsPanel.hidden; });
 document.getElementById('settingsClose').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); settingsPanel.hidden = true; });
 document.getElementById('settingsSave').addEventListener('pointerdown', (e)=>{
@@ -1620,7 +1647,9 @@ async function askMatrix(question){
 }
 
 let speakGen = 0; // guards the delayed speak() below against a newer reply arriving first
+let lastReplyText = ''; // so the manual "hear it" button can replay the most recent reply on demand
 function speakReply(text){
+  lastReplyText = text;
   dbgLog('speakReply() called, text len ' + text.length);
   try {
     if (!('speechSynthesis' in window)){ dbgLog('no speechSynthesis in window'); return; }
