@@ -256,6 +256,7 @@
 <div id="dock">
   <div id="dockInner">
     <button class="dockBtn" id="modeBtn" title="touch mode: push / pull / splash">P</button>
+    <button class="dockBtn" id="dbBtn" title="Dragon Ball mode: off. Tap to arm it, then a quick long swipe throws a fireball to the paired CYD board">🐉</button>
     <input id="msgInput" type="text" placeholder="Speak or type..." autocomplete="off" spellcheck="false">
     <button class="dockBtn" id="micBtn" title="speak">🎤</button>
     <button class="dockBtn" id="sendBtn" title="send">➤</button>
@@ -386,6 +387,17 @@ function handleSwipe(x,y,now){
   const swipeHoriz = Math.abs(ddx) > Math.abs(ddy);
   const swipeDir = swipeHoriz ? (ddx>0?1:-1) : (ddy>0?1:-1);
   const redirectThresh = (swipeHoriz ? W : H) * 0.62;
+
+  // Dragon Ball: a "quick, long swipe" is exactly the existing far-swipe case below
+  // (dist > redirectThresh, inside the same 450ms window) -- just also throws a fireball
+  // when armed. Checked here, before any of the existing branches, and never changes what
+  // they do: it only reads dist/redirectThresh, never swipeFired or the rain state.
+  if (dragonBallMode && !dbThrowFiredThisGesture && dist > redirectThresh){
+    dbThrowFiredThisGesture = true;
+    const dir = swipeHoriz ? (swipeDir>0 ? 'right' : 'left') : (swipeDir>0 ? 'down' : 'up');
+    throwDragonBall(dir);
+  }
+
   if (swipeHoriz === rainHoriz && swipeDir === rainDir){
     rainVelMod = 3.5; swipeFired = true;
   } else if (swipeHoriz === rainHoriz){
@@ -402,6 +414,98 @@ function handleSwipe(x,y,now){
     buildStreams();
     rainCalm = 0.25; rainVelMod = 1.0;
     swipeFired = true;
+  }
+}
+
+/* ======================================================================
+   DRAGON BALL MODE -- purely additive. Nothing above/below this block is
+   touched: the rain, every existing gesture (push/pull/splash, swipe-steer,
+   burst, two-finger stretch/pinch) behaves exactly as before whether this
+   is on or off. When armed, the SAME "quick, long swipe" that already
+   qualifies for a full redirect in handleSwipe() (dist > redirectThresh,
+   within the existing 450ms window) ALSO fires one fireball: a local
+   animation flying off this screen's matching edge, plus a single
+   fire-and-forget HTTP request to the paired CYD board's own WiFi hotspot
+   telling it which edge to fly the ball IN from. No socket is kept open --
+   one request per throw, same spirit as the board's existing BLE message
+   feature (a short message triggers a one-shot effect, nothing persistent).
+   ====================================================================== */
+let dragonBallMode = false;
+let dbThrowFiredThisGesture = false;
+const DB_BOARD_URL = (localStorage.getItem('dragonBall.boardUrl') || 'http://192.168.4.1').replace(/\/$/,'');
+let fireball = null; // {x,y,vx,vy,startT}
+let dbTrail = [];     // {x,y,age}
+const DB_LIFETIME_MS = 650;
+const DB_SPEED = 26; // px/frame-ish, scaled by dt below
+
+function dbSetArmed(on){
+  dragonBallMode = on;
+  const btn = document.getElementById('dbBtn');
+  btn.classList.toggle('active', on);
+  btn.title = on
+    ? 'Dragon Ball mode: ON. Long swipe = throw a fireball to the paired board'
+    : 'Dragon Ball mode: off. Tap to arm it, then a quick long swipe throws a fireball to the paired CYD board';
+}
+
+// dir: 'left' | 'right' | 'up' | 'down' -- the edge the ball flies OFF of on this screen.
+// Tells the board the same edge name; the board enters its own fireball from that same
+// edge, so a left swipe on the phone makes the ball appear coming in from the board's
+// left edge too (flip this mapping in dbStartFireball()/firmware if your two screens end
+// up sitting mirrored rather than side-by-side the same way round).
+function throwDragonBall(dir){
+  dbStartFireball(dir);
+  fetch(DB_BOARD_URL + '/throw?dir=' + dir, { mode:'no-cors', cache:'no-store' }).catch(()=>{
+    // board not reachable (not on its WiFi yet, wrong IP, etc.) -- the LOCAL fireball still
+    // plays either way, so a disconnected phone doesn't look like the gesture did nothing.
+  });
+}
+
+function dbStartFireball(dir){
+  const pad = 40;
+  let x,y,vx,vy;
+  if (dir==='left'){ x=W+pad; y=H*0.5; vx=-DB_SPEED; vy=0; }
+  else if (dir==='right'){ x=-pad; y=H*0.5; vx=DB_SPEED; vy=0; }
+  else if (dir==='up'){ x=W*0.5; y=H+pad; vx=0; vy=-DB_SPEED; }
+  else { x=W*0.5; y=-pad; vx=0; vy=DB_SPEED; }
+  fireball = { x, y, vx, vy, startT: performance.now(), rot:0 };
+  dbTrail = [];
+}
+
+function updateAndDrawFireball(now, dt){
+  if (!fireball) return;
+  const step = dt/16.7;
+  fireball.x += fireball.vx * step;
+  fireball.y += fireball.vy * step;
+  fireball.rot += 0.3 * step;
+  dbTrail.push({ x:fireball.x, y:fireball.y, age:0 });
+  for (const t of dbTrail) t.age++;
+  dbTrail = dbTrail.filter(t => t.age < 16);
+
+  const FLAME = ['#ff2200','#ff8800','#ffee55'];
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const t of dbTrail){
+    const r = Math.max(0, 7 - t.age/2.3);
+    if (r <= 0) continue;
+    ctx.fillStyle = FLAME[t.age % 3];
+    ctx.globalAlpha = Math.max(0, 1 - t.age/16);
+    ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(fireball.x, fireball.y, 10, 0, Math.PI*2); ctx.fillStyle = FLAME[0]; ctx.fill();
+  ctx.beginPath(); ctx.arc(fireball.x, fireball.y, 7, 0, Math.PI*2); ctx.fillStyle = FLAME[1]; ctx.fill();
+  ctx.beginPath(); ctx.arc(fireball.x, fireball.y, 4, 0, Math.PI*2); ctx.fillStyle = FLAME[2]; ctx.fill();
+  for (let s=0; s<3; s++){
+    const a = fireball.rot + s*2.094;
+    ctx.beginPath();
+    ctx.arc(fireball.x + Math.cos(a)*12, fireball.y + Math.sin(a)*12, 3, 0, Math.PI*2);
+    ctx.fillStyle = FLAME[s%3]; ctx.fill();
+  }
+  ctx.restore();
+
+  if (now - fireball.startT > DB_LIFETIME_MS ||
+      fireball.x < -60 || fireball.x > W+60 || fireball.y < -60 || fireball.y > H+60){
+    fireball = null; dbTrail = [];
   }
 }
 
@@ -561,6 +665,7 @@ canvas.addEventListener('pointerdown', (e)=>{
   touching = true;
   fx = e.clientX; fy = e.clientY;
   swipeStartX = fx; swipeStartY = fy; swipeStartT = performance.now(); swipeFired = false;
+  dbThrowFiredThisGesture = false;
   const now = performance.now();
   if (taps[0] !== 0 && now - taps[0] < 550){
     startBurst(fx, fy);
@@ -589,6 +694,7 @@ function pointerUp(e){
     const [p] = pointers.values();
     touching = true; fx = p.x; fy = p.y;
     swipeStartX = fx; swipeStartY = fy; swipeStartT = performance.now(); swipeFired = false;
+    dbThrowFiredThisGesture = false;
   } else if (pointers.size === 0){
     touching = false;
   }
@@ -759,6 +865,12 @@ document.getElementById('modeBtn').addEventListener('pointerdown', (e)=>{
   modeIdx = (modeIdx+1) % MODES.length;
   const btn = e.currentTarget;
   btn.textContent = MODES[modeIdx][0].toUpperCase();
+});
+
+document.getElementById('dbBtn').addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+  dbSetArmed(!dragonBallMode);
+  setStatus('live', dragonBallMode ? 'Dragon Ball armed -- long swipe to throw' : 'rain running');
 });
 
 /* ======================================================================
@@ -1509,6 +1621,7 @@ function frame(){
 
   ctx.shadowBlur = 0; // don't let a halo from the last rain glyph bleed into the message text below
   drawMessageOverlay(now);
+  updateAndDrawFireball(now, dt);
   requestAnimationFrame(frame);
 }
 
