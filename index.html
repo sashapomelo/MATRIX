@@ -255,7 +255,7 @@
 
 <div id="dock">
   <div id="dockInner">
-    <button class="dockBtn" id="modeBtn" title="touch mode: push / pull / splash">P</button>
+    <button class="dockBtn" id="modeBtn" title="touch mode: push (P) / pull (G)">P</button>
     <button class="dockBtn" id="dbBtn" title="Dragon Ball mode: off. Tap to arm it, then a quick long swipe throws a fireball to the paired CYD board">🐉</button>
     <input id="msgInput" type="text" placeholder="Speak or type..." autocomplete="off" spellcheck="false">
     <button class="dockBtn" id="micBtn" title="speak">🎤</button>
@@ -327,7 +327,7 @@ function mixRGB(c1,c2,t){
 function rgbCss(c){ return `rgb(${c[0]},${c[1]},${c[2]})`; }
 
 /* ======================================================================
-   RAIN STREAMS -- ported 1:1 from the CYD build's push/pull/splash math
+   RAIN STREAMS -- ported 1:1 from the CYD build's push/pull math
    (d' = sqrt(d^2 + R^2) deflection), with the same axis-agnostic
    pos/cross trick so a stream doesn't care whether rain is falling or
    flowing sideways.
@@ -353,7 +353,7 @@ function newStream(initial){
   } else {
     pos = rainDir>0 ? -len*cell - Math.random()*40 : extent + len*cell + Math.random()*40;
   }
-  return { horiz, cross, len, v, chars, pos, jitter:0, splashT:0, knockT:0 };
+  return { horiz, cross, len, v, chars, pos, jitter:0 };
 }
 function resetStream(s){
   const ns = newStream(false);
@@ -366,12 +366,17 @@ function buildStreams(){
 }
 
 /* ======================================================================
-   POINTER -- push / pull / splash, same math as the CYD's finger hole
+   POINTER -- push / pull, same math as the CYD's finger hole (splash mode dropped: it never
+   got its visible obstacle marker or contact-spark burst ported over from the CYD build, so it
+   just looked like a weaker push and added nothing)
    ====================================================================== */
-const MODES = ['push','pull','splash'];
+const MODES = ['push','pull'];
+const MODE_LABELS = ['P','G'];  // button text per mode -- separate from MODES[] itself since
+                                  // "push" and "pull" share the same first letter ("P"), which is
+                                  // exactly why switching modes used to look like nothing changed
 let modeIdx = 0;
 let fx=0, fy=0, touching=false, fR=0;
-const MAX_R = 46, SPLASH_R = 30;
+const MAX_R = 46;
 
 /* swipe + tap tracking (ported thresholds from the CYD build) */
 let swipeStartX=0, swipeStartY=0, swipeStartT=0, swipeFired=false;
@@ -430,7 +435,7 @@ function handleSwipe(x,y,now){
 
 /* ======================================================================
    DRAGON BALL MODE -- purely additive. Nothing above/below this block is
-   touched: the rain, every existing gesture (push/pull/splash, swipe-steer,
+   touched: the rain, every existing gesture (push/pull, swipe-steer,
    burst, two-finger stretch/pinch) behaves exactly as before whether this
    is on or off. When armed, the SAME "quick, long swipe" that already
    qualifies for a full redirect in handleSwipe() (dist > redirectThresh,
@@ -936,7 +941,7 @@ document.getElementById('modeBtn').addEventListener('pointerdown', (e)=>{
   e.stopPropagation();
   modeIdx = (modeIdx+1) % MODES.length;
   const btn = e.currentTarget;
-  btn.textContent = MODES[modeIdx][0].toUpperCase();
+  btn.textContent = MODE_LABELS[modeIdx];
 });
 
 document.getElementById('dbBtn').addEventListener('pointerdown', (e)=>{
@@ -1636,10 +1641,6 @@ function frame(){
             if (nd<4) absorbed = true;
             else { const k=nd/d; cx=fx+dx*k; cy=fy+dy*k; }
             glow = pull;
-          } else if (mode==='splash'){
-            const nd = Math.sqrt(d*d + SPLASH_R*SPLASH_R);
-            const k = nd/d; cx=fx+dx*k; cy=fy+dy*k;
-            glow = 1-(nd-SPLASH_R)/(SPLASH_R*0.9); if (glow<0) glow=0;
           } else {
             const nd = Math.sqrt(d*d + fR*fR);
             const k = nd/d; cx=fx+dx*k; cy=fy+dy*k;
