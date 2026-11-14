@@ -395,12 +395,23 @@ function handleSwipe(x,y,now){
   if (dragonBallMode && !dbThrowFiredThisGesture && dist > redirectThresh){
     dbThrowFiredThisGesture = true;
     const dir = swipeHoriz ? (swipeDir>0 ? 'right' : 'left') : (swipeDir>0 ? 'down' : 'up');
-    throwDragonBall(dir);
+    // the ball enters/exits near where the swipe actually happened, not always dead-center on
+    // that edge: for a horizontal swipe the relevant "where" is the finger's current Y, for a
+    // vertical swipe it's the current X -- i.e. whatever the CROSS axis is for this swipe.
+    const crossPos = swipeHoriz ? y : x;
+    throwDragonBall(dir, crossPos);
   }
 
   if (swipeHoriz === rainHoriz && swipeDir === rainDir){
-    rainVelMod = 3.5; swipeFired = true;
-  } else if (swipeHoriz === rainHoriz){
+    rainVelMod = 3.5; swipeFired = true;  // kept active in Dragon Ball mode too, on purpose --
+                                            // this is just a speed pulse, not a direction change,
+                                            // so there's nothing for the throw gesture to conflict
+                                            // with here. Testing whether it interferes in practice.
+  } else if (!dragonBallMode && swipeHoriz === rainHoriz){
+    // While Dragon Ball mode is armed, this far-swipe-against-the-flow redirect is replaced
+    // entirely by the throw (handled above) -- the rain's direction/axis never changes from a
+    // swipe while armed, so the ball doesn't appear to fly across a rain field that just reset
+    // itself out from under it.
     if (dist > redirectThresh){
       rainDir = -rainDir;
       streams.forEach(resetStream);
@@ -409,7 +420,7 @@ function handleSwipe(x,y,now){
       rainVelMod = -0.35;
     }
     swipeFired = true;
-  } else if (dist > redirectThresh){
+  } else if (!dragonBallMode && dist > redirectThresh){
     rainHoriz = swipeHoriz; rainDir = swipeDir;
     buildStreams();
     rainCalm = 0.25; rainVelMod = 1.0;
@@ -433,9 +444,15 @@ function handleSwipe(x,y,now){
 let dragonBallMode = false;
 let dbThrowFiredThisGesture = false;
 const DB_BOARD_URL = (localStorage.getItem('dragonBall.boardUrl') || 'http://192.168.4.1').replace(/\/$/,'');
-let fireball = null; // {x,y,vx,vy,startT}
+let fireball = null; // {x,y,vx,vy,startT,rot}
 let dbTrail = [];     // {x,y,age}
-const DB_LIFETIME_MS = 650;
+let dbGlyphChars = []; // the ring of matrix characters orbiting the ball's core
+let dbGlyphAngles = [];
+const DB_GLYPH_N = 9;
+const DB_GLYPH_R = 11;       // orbit radius of the glyph ring
+const DB_DESTROY_R = 26;     // inside this: a rain glyph is consumed outright (not drawn)
+const DB_SWIRL_R = 95;       // inside this (and outside DESTROY_R): glyphs get pulled into the vortex
+const DB_LIFETIME_MS = 900;
 const DB_SPEED = 26; // px/frame-ish, scaled by dt below
 
 function dbSetArmed(on){
@@ -452,57 +469,112 @@ function dbSetArmed(on){
 // edge, so a left swipe on the phone makes the ball appear coming in from the board's
 // left edge too (flip this mapping in dbStartFireball()/firmware if your two screens end
 // up sitting mirrored rather than side-by-side the same way round).
-function throwDragonBall(dir){
-  dbStartFireball(dir);
+function throwDragonBall(dir, crossPos){
+  dbStartFireball(dir, crossPos);
   fetch(DB_BOARD_URL + '/throw?dir=' + dir, { mode:'no-cors', cache:'no-store' }).catch(()=>{
     // board not reachable (not on its WiFi yet, wrong IP, etc.) -- the LOCAL fireball still
     // plays either way, so a disconnected phone doesn't look like the gesture did nothing.
   });
 }
 
-function dbStartFireball(dir){
+function dbStartFireball(dir, crossPos){
   const pad = 40;
+  const MARGIN = 36; // keep it from spawning right in a corner if the swipe ended near one
   let x,y,vx,vy;
-  if (dir==='left'){ x=W+pad; y=H*0.5; vx=-DB_SPEED; vy=0; }
-  else if (dir==='right'){ x=-pad; y=H*0.5; vx=DB_SPEED; vy=0; }
-  else if (dir==='up'){ x=W*0.5; y=H+pad; vx=0; vy=-DB_SPEED; }
-  else { x=W*0.5; y=-pad; vx=0; vy=DB_SPEED; }
+  if (dir==='left' || dir==='right'){
+    const cy = Math.max(MARGIN, Math.min(H-MARGIN, crossPos));
+    if (dir==='left'){ x=W+pad; y=cy; vx=-DB_SPEED; vy=0; }
+    else { x=-pad; y=cy; vx=DB_SPEED; vy=0; }
+  } else {
+    const cx = Math.max(MARGIN, Math.min(W-MARGIN, crossPos));
+    if (dir==='up'){ x=cx; y=H+pad; vx=0; vy=-DB_SPEED; }
+    else { x=cx; y=-pad; vx=0; vy=DB_SPEED; }
+  }
   fireball = { x, y, vx, vy, startT: performance.now(), rot:0 };
   dbTrail = [];
+  dbGlyphChars = []; dbGlyphAngles = [];
+  for (let i=0;i<DB_GLYPH_N;i++){
+    dbGlyphChars.push(randGlyph());
+    dbGlyphAngles.push(i/DB_GLYPH_N*Math.PI*2 + (Math.random()-0.5)*0.3);
+  }
 }
 
-function updateAndDrawFireball(now, dt){
+// Called once per frame BEFORE the rain's own per-glyph loop runs, so the vortex-pull/destroy
+// check below can see the ball's up-to-date position for this frame.
+function dbTick(dt){
   if (!fireball) return;
   const step = dt/16.7;
   fireball.x += fireball.vx * step;
   fireball.y += fireball.vy * step;
-  fireball.rot += 0.3 * step;
+  fireball.rot += 0.12 * step; // ring spin speed
   dbTrail.push({ x:fireball.x, y:fireball.y, age:0 });
   for (const t of dbTrail) t.age++;
   dbTrail = dbTrail.filter(t => t.age < 16);
+  if (Math.random() < 0.35) dbGlyphChars[(Math.random()*DB_GLYPH_N)|0] = randGlyph(); // churn, reads as alive
+}
 
-  const FLAME = ['#ff2200','#ff8800','#ffee55'];
+// deflects/destroys ONE rain glyph against the active fireball, same calling convention as
+// deflectAgainstMessage(): returns {cx,cy,glow,absorbed}. Called from inside the rain's own
+// per-glyph loop in frame(), same spot the finger push/pull and the message safety net hook in.
+function deflectAgainstFireball(cx, cy){
+  if (!fireball) return { cx, cy, glow:0, absorbed:false };
+  const dx = cx-fireball.x, dy = cy-fireball.y;
+  const d = Math.sqrt(dx*dx+dy*dy);
+  if (d < DB_DESTROY_R) return { cx, cy, glow:1, absorbed:true }; // consumed outright
+  if (d >= DB_SWIRL_R) return { cx, cy, glow:0, absorbed:false };
+  // pulled into the vortex (mirrors the existing "pull" mode math, same d'=sqrt formula,
+  // just centered on the ball instead of the finger) -- swirls in before being eaten
+  const pull = DB_DESTROY_R / (d + DB_DESTROY_R);
+  const nd = d * (1 - pull*0.92);
+  if (nd < DB_DESTROY_R*0.6) return { cx, cy, glow:1, absorbed:true };
+  const k = nd/d;
+  return { cx: fireball.x + dx*k, cy: fireball.y + dy*k, glow: pull, absorbed:false };
+}
+
+function drawFireball(){
+  if (!fireball) return;
+  const FLAME = ['#ff2a1a','#ff8a3c','#ffd04a'];
   ctx.save();
+
+  // soft red glow "sphere" backing -- the body of the swirl pool
+  const grad = ctx.createRadialGradient(fireball.x, fireball.y, 0, fireball.x, fireball.y, DB_SWIRL_R*0.35);
+  grad.addColorStop(0, 'rgba(255,50,20,0.9)');
+  grad.addColorStop(0.5, 'rgba(255,30,10,0.35)');
+  grad.addColorStop(1, 'rgba(255,20,0,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(fireball.x, fireball.y, DB_SWIRL_R*0.35, 0, Math.PI*2); ctx.fill();
+
+  // trailing embers
   ctx.globalCompositeOperation = 'lighter';
   for (const t of dbTrail){
-    const r = Math.max(0, 7 - t.age/2.3);
+    const r = Math.max(0, 6 - t.age/2.6);
     if (r <= 0) continue;
     ctx.fillStyle = FLAME[t.age % 3];
     ctx.globalAlpha = Math.max(0, 1 - t.age/16);
     ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, Math.PI*2); ctx.fill();
   }
   ctx.globalAlpha = 1;
-  ctx.beginPath(); ctx.arc(fireball.x, fireball.y, 10, 0, Math.PI*2); ctx.fillStyle = FLAME[0]; ctx.fill();
-  ctx.beginPath(); ctx.arc(fireball.x, fireball.y, 7, 0, Math.PI*2); ctx.fillStyle = FLAME[1]; ctx.fill();
-  ctx.beginPath(); ctx.arc(fireball.x, fireball.y, 4, 0, Math.PI*2); ctx.fillStyle = FLAME[2]; ctx.fill();
-  for (let s=0; s<3; s++){
-    const a = fireball.rot + s*2.094;
-    ctx.beginPath();
-    ctx.arc(fireball.x + Math.cos(a)*12, fireball.y + Math.sin(a)*12, 3, 0, Math.PI*2);
-    ctx.fillStyle = FLAME[s%3]; ctx.fill();
-  }
-  ctx.restore();
 
+  // the spinning ring of matrix glyphs -- the "mini swirl pool" itself, same alphabet/font
+  // as the rain so it visually reads as rain letters caught in a vortex, not a foreign shape
+  ctx.font = `700 ${FONT_PX}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i=0;i<DB_GLYPH_N;i++){
+    const a = dbGlyphAngles[i] + fireball.rot;
+    const gx = fireball.x + Math.cos(a)*DB_GLYPH_R;
+    const gy = fireball.y + Math.sin(a)*DB_GLYPH_R;
+    ctx.fillStyle = i%2===0 ? FLAME[0] : FLAME[1];
+    ctx.fillText(dbGlyphChars[i], gx, gy);
+  }
+  ctx.fillStyle = '#fff3e0'; // white-hot core
+  ctx.beginPath(); ctx.arc(fireball.x, fireball.y, 3, 0, Math.PI*2); ctx.fill();
+
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+}
+
+function dbMaybeExpire(now){
+  if (!fireball) return;
   if (now - fireball.startT > DB_LIFETIME_MS ||
       fireball.x < -60 || fireball.x > W+60 || fireball.y < -60 || fireball.y > H+60){
     fireball = null; dbTrail = [];
@@ -1515,6 +1587,8 @@ function frame(){
   revealAmt += (revealTarget - revealAmt) * Math.min(1, dt / REVEAL_FADE_MS);
   if (revealAmt < 0.01) revealAmt = 0;
 
+  dbTick(dt); // advance the fireball (if any) BEFORE the rain loop below reads its position
+
   drawInsidesReveal(now, dt); // under the rain, so the parted cables read as a curtain over it
 
   if (burstFrame>0){
@@ -1574,6 +1648,12 @@ function frame(){
         }
         if (absorbed) continue;
 
+        if (fireball){
+          const rf = deflectAgainstFireball(cx,cy);
+          cx=rf.cx; cy=rf.cy; if (rf.glow>glow) glow=rf.glow;
+          if (rf.absorbed) continue;
+        }
+
         if (msg){
           const r = deflectAgainstMessage(cx,cy);
           cx=r.cx; cy=r.cy; if (r.glow>glow) glow=r.glow;
@@ -1621,7 +1701,8 @@ function frame(){
 
   ctx.shadowBlur = 0; // don't let a halo from the last rain glyph bleed into the message text below
   drawMessageOverlay(now);
-  updateAndDrawFireball(now, dt);
+  drawFireball();
+  dbMaybeExpire(now);
   requestAnimationFrame(frame);
 }
 
