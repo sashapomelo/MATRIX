@@ -448,7 +448,12 @@ function handleSwipe(x,y,now){
    ====================================================================== */
 let dragonBallMode = false;
 let dbThrowFiredThisGesture = false;
-const DB_BOARD_URL = (localStorage.getItem('dragonBall.boardUrl') || 'http://192.168.4.1').replace(/\/$/,'');
+// Empty by default on purpose: the normal setup now is the CYD board serving this very page at
+// http://192.168.4.1/, so a THROW request should just go to "/throw" on whatever origin served
+// us -- that's same-origin, which is also the only way this ever avoids Safari's https->http
+// mixed-content block. Only set dragonBall.boardUrl in localStorage if you're doing something
+// unusual (e.g. loading this page from somewhere else while reaching the board on the same LAN).
+const DB_BOARD_URL = (localStorage.getItem('dragonBall.boardUrl') || '').replace(/\/$/,'');
 let fireball = null; // {x,y,vx,vy,startT,rot}
 let dbTrail = [];     // {x,y,age}
 let dbGlyphChars = []; // the ring of matrix characters orbiting the ball's core
