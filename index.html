@@ -1964,7 +1964,17 @@ if (SR){
       msgInput.value = (finalTranscript + interim).trim();
       dbgLog('recognizer.onresult: "' + msgInput.value + '"');
     };
-    r.onerror = (e)=>{ dbgLog('recognizer.onerror: ' + e.error); setStatus('err', 'mic error: '+e.error); };
+    r.onerror = (e)=>{
+      dbgLog('recognizer.onerror: ' + e.error);
+      // 'aborted' is what iOS fires as the normal, expected side effect of US calling
+      // .stop()/.abort() ourselves on a manual stop -- it's not a real failure, just
+      // confirmation the session tore down. Showing it as a red "mic error" banner
+      // (which, since onend's old logic only cleared the status when there was also
+      // recognized text to send, could then just sit there forever) is exactly what
+      // looked like "stuck" -- the mic was fine, the screen was just stuck on a scary
+      // message. Only show the banner for errors that aren't just our own stop().
+      if (e.error !== 'aborted') setStatus('err', 'mic error: '+e.error);
+    };
     r.onend = ()=>{
       recognizing = false; micBtn.classList.remove('listening');
       dbgLog('recognizer.onend');
@@ -1975,8 +1985,13 @@ if (SR){
       // harm calling resume() on an already-active engine, or on browsers that
       // never needed it) should keep spoken replies working right after a mic turn.
       try { window.speechSynthesis.resume(); dbgLog('speechSynthesis.resume() after mic session'); } catch(e){}
+      // Always put the status back to normal here -- previously this only happened
+      // when stoppedManually was false, or when manually stopped WITH text to send.
+      // A manual stop with nothing transcribed (e.g. you just tapped to cancel, or
+      // iOS never produced a result in time) fell through both branches and left
+      // whatever the last status message was (often the error above) stuck on screen.
       if (stoppedManually && msgInput.value.trim()){ setStatus('live','rain running'); doSend(); }
-      else if (!stoppedManually) setStatus('live','rain running');
+      else setStatus('live','rain running');
     };
     return r;
   }
