@@ -1869,7 +1869,13 @@ function speakReply(text){
       // errors (not-allowed, synthesis-failed, audio-busy, etc.) and whether
       // the browser ever reports starting/finishing the utterance at all.
       u.onstart = ()=>{ dbgLog('utterance onstart fired'); setStatus('live', 'speech: started'); };
-      u.onend = ()=>{ dbgLog('utterance onend fired'); setStatus('live', 'speech: ended ok'); };
+      u.onend = ()=>{
+        dbgLog('utterance onend fired'); setStatus('live', 'speech: ended ok');
+        // Same audio-session release as before a mic start, but done right away here
+        // too -- the sooner iOS lets go of the speech-synthesis route after talking,
+        // the less likely the NEXT recognition session is to start deaf.
+        try { window.speechSynthesis.cancel(); } catch(e){}
+      };
       u.onerror = (ev)=>{ dbgLog('utterance onerror: ' + (ev.error || 'unknown')); setStatus('err', 'speech error: ' + (ev.error || 'unknown')); };
       const voiceCount = (window.speechSynthesis.getVoices() || []).length;
       // iOS Safari can leave the speech engine suspended (accepts speak() calls
@@ -2037,6 +2043,13 @@ if (SR){
     const wait = Math.max(0, MIC_RESTART_GAP_MS - gap);
     const reallyStart = ()=>{
       startPending = false;
+      // Found via other iOS 16 reports of this exact symptom (session "starts" but
+      // never actually captures audio): it happens specifically when something was
+      // played through speechSynthesis in between recognition sessions -- i.e. every
+      // time here, since the reply gets spoken aloud between mic turns. resume() alone
+      // (used elsewhere) doesn't fully let go of the audio session; an explicit cancel()
+      // does. Harmless no-op if nothing is actually speaking.
+      try { window.speechSynthesis.cancel(); dbgLog('speechSynthesis.cancel() before mic start'); } catch(e){}
       recognizer = createRecognizer(); // fresh instance every time, see note above
       try { recognizer.start(); } catch(e){ dbgLog('recognizer.start() threw: ' + e.message); }
       // Same watchdog, other direction: if start() doesn't actually produce onstart shortly,
