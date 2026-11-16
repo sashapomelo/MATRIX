@@ -475,30 +475,40 @@ function dbOppositeDir(dir){
 // just the browser's native EventSource. Only called while Dragon Ball mode is armed.
 function dbConnectRelay(){
   const url = dbFirebaseUrl();
-  if (!url || dbEventSource) return;
+  if (!url){ dbgLog('dbConnectRelay: no Firebase URL set -- local-only'); return; }
+  if (dbEventSource){ dbgLog('dbConnectRelay: already connected'); return; }
   try {
     dbLastSeenTs = Date.now(); // don't react to whatever the last throw in the room already was
+    dbgLog('dbConnectRelay: opening ' + url + '/throws/current.json');
     dbEventSource = new EventSource(url + '/throws/current.json');
+    dbEventSource.onopen = ()=>{ dbgLog('dbEventSource: open'); };
     dbEventSource.addEventListener('put', (ev)=>{
+      dbgLog('dbEventSource put: ' + ev.data);
       try {
         const msg = JSON.parse(ev.data); // { path: "/", data: {...} }
         const t = msg && msg.data;
-        if (!t || typeof t !== 'object') return;
-        if (t.from === DB_CLIENT_ID) return;           // our own throw bouncing back -- ignore
-        if (!t.ts || t.ts <= dbLastSeenTs) return;      // already reacted to this one, or stale
-        if (Date.now() - t.ts > DB_THROW_MAX_AGE_MS) return; // too old to be a "live" throw
+        if (!t || typeof t !== 'object'){ dbgLog('dbEventSource put: no data (room emptied?)'); return; }
+        if (t.from === DB_CLIENT_ID){ dbgLog('dbEventSource put: ignoring own throw'); return; }
+        if (!t.ts || t.ts <= dbLastSeenTs){ dbgLog('dbEventSource put: already seen/stale ts'); return; }
+        if (Date.now() - t.ts > DB_THROW_MAX_AGE_MS){ dbgLog('dbEventSource put: too old (' + (Date.now()-t.ts) + 'ms)'); return; }
         dbLastSeenTs = t.ts;
-        if (!dragonBallMode) return;                    // got disarmed in the meantime
-        dbStartFireball(dbOppositeDir(t.dir), typeof t.crossPos === 'number' ? t.crossPos : H/2);
-      } catch(e){}
+        if (!dragonBallMode){ dbgLog('dbEventSource put: got disarmed, ignoring'); return; }
+        // NOT dbOppositeDir() here -- that flip was making the ball reverse direction on
+        // arrival (left-to-right throw showed up as right-to-left, etc). Using the SAME dir
+        // keeps the ball moving the same way it was thrown, which is what you actually want.
+        dbgLog('dbEventSource put: firing incoming fireball, dir=' + t.dir);
+        dbStartFireball(t.dir, typeof t.crossPos === 'number' ? t.crossPos : H/2);
+      } catch(e){ dbgLog('dbEventSource put: parse threw ' + e.message); }
     });
-    dbEventSource.onerror = ()=>{
-      // EventSource auto-reconnects on its own; nothing to do here except let it keep trying.
+    dbEventSource.onerror = (ev)=>{
+      // EventSource auto-reconnects on its own; just log readyState so we can tell "briefly
+      // reconnecting" (readyState 0) apart from "never actually connected at all".
+      dbgLog('dbEventSource onerror, readyState=' + dbEventSource.readyState);
     };
-  } catch(e){ dbEventSource = null; }
+  } catch(e){ dbgLog('dbConnectRelay threw: ' + e.message); dbEventSource = null; }
 }
 function dbDisconnectRelay(){
-  if (dbEventSource){ try { dbEventSource.close(); } catch(e){} dbEventSource = null; }
+  if (dbEventSource){ try { dbEventSource.close(); dbgLog('dbDisconnectRelay: closed'); } catch(e){} dbEventSource = null; }
 }
 let fireball = null; // {x,y,vx,vy,startT,rot}
 let dbTrail = [];     // {x,y,age}
@@ -531,17 +541,22 @@ function dbSetArmed(on){
 function throwDragonBall(dir, crossPos){
   dbStartFireball(dir, crossPos); // local animation plays immediately regardless of network
   const url = dbFirebaseUrl();
-  if (!url) return; // no relay configured -- local-only, same as before
+  if (!url){ dbgLog('throwDragonBall: no Firebase URL set -- local-only'); return; }
   const ts = Date.now();
   dbLastSeenTs = ts; // don't let our own write come back through the relay and fire twice
+  dbgLog('throwDragonBall: PUT ' + url + '/throws/current.json dir=' + dir);
   fetch(url + '/throws/current.json', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ dir, crossPos, from: DB_CLIENT_ID, ts }),
     cache: 'no-store'
-  }).catch(()=>{
+  }).then(res=>{
+    dbgLog('throwDragonBall: PUT response ' + res.status);
+    if (!res.ok) return res.text().then(t=>dbgLog('throwDragonBall: PUT body ' + t));
+  }).catch(err=>{
     // relay not reachable (offline, Firebase URL wrong, etc.) -- the LOCAL fireball still
     // played either way, so a disconnected device doesn't look like the gesture did nothing.
+    dbgLog('throwDragonBall: PUT threw ' + err.message);
   });
 }
 
