@@ -247,6 +247,9 @@
   <label for="modelId">Model</label>
   <input id="modelId" type="text" placeholder="gemini-3.6-flash" spellcheck="false">
   <div class="hint">Stored only in this browser. Get a free key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>. If replies stop working, that page will show the current free model id — paste it above.</div>
+  <label for="dbFirebaseUrlInput">Dragon Ball relay (Firebase URL)</label>
+  <input id="dbFirebaseUrlInput" type="text" placeholder="https://your-project-default-rtdb.firebaseio.com" autocomplete="off" spellcheck="false">
+  <div class="hint">Same URL pasted into every device (PC/phone/CYD) that should be able to throw to or receive from each other. Leave blank to keep the fireball animation local-only.</div>
   <div class="row">
     <button id="settingsSave">Save</button>
     <button id="settingsClose">Close</button>
@@ -448,12 +451,55 @@ function handleSwipe(x,y,now){
    ====================================================================== */
 let dragonBallMode = false;
 let dbThrowFiredThisGesture = false;
-// Empty by default on purpose: the normal setup now is the CYD board serving this very page at
-// http://192.168.4.1/, so a THROW request should just go to "/throw" on whatever origin served
-// us -- that's same-origin, which is also the only way this ever avoids Safari's https->http
-// mixed-content block. Only set dragonBall.boardUrl in localStorage if you're doing something
-// unusual (e.g. loading this page from somewhere else while reaching the board on the same LAN).
-const DB_BOARD_URL = (localStorage.getItem('dragonBall.boardUrl') || '').replace(/\/$/,'');
+// Cross-device throwing now goes through a shared Firebase Realtime Database "room" instead of
+// a direct HTTP call to a board on the same LAN -- that sidesteps the whole mixed-content /
+// same-WiFi / hotspot-joining mess entirely: PC, phone and the CYD board each just need SOME
+// working internet connection (any WiFi, cellular, doesn't matter) and watch the same shared
+// value. Empty by default on purpose -- until you paste your Realtime Database's URL into the
+// "Dragon Ball relay" field in Settings (e.g. https://your-project-default-rtdb.firebaseio.com),
+// Dragon Ball mode still works for the LOCAL fireball animation, it just never reaches another
+// device. Read fresh each time (not cached in a const) so saving Settings takes effect on the
+// very next throw/arm, no page reload needed.
+function dbFirebaseUrl(){ return (localStorage.getItem('dragonBall.firebaseUrl') || '').replace(/\/$/,''); }
+// One random id per page load/tab, so a device never reacts to the throw it just sent itself
+// (Firebase pushes every write back out to every listener, including the one that wrote it).
+const DB_CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+let dbEventSource = null;     // the live connection to the shared Firebase value, while armed
+let dbLastSeenTs = 0;         // ignore anything not newer than the last throw we already reacted to
+const DB_THROW_MAX_AGE_MS = 4000; // ignore a throw this stale (e.g. right when we first connect)
+function dbOppositeDir(dir){
+  return dir==='left' ? 'right' : dir==='right' ? 'left' : dir==='up' ? 'down' : 'up';
+}
+// Opens the live "watch" connection to the shared throw value. Firebase's REST API serves
+// Server-Sent Events straight from a plain GET with this header -- no SDK/extra library needed,
+// just the browser's native EventSource. Only called while Dragon Ball mode is armed.
+function dbConnectRelay(){
+  const url = dbFirebaseUrl();
+  if (!url || dbEventSource) return;
+  try {
+    dbLastSeenTs = Date.now(); // don't react to whatever the last throw in the room already was
+    dbEventSource = new EventSource(url + '/throws/current.json');
+    dbEventSource.addEventListener('put', (ev)=>{
+      try {
+        const msg = JSON.parse(ev.data); // { path: "/", data: {...} }
+        const t = msg && msg.data;
+        if (!t || typeof t !== 'object') return;
+        if (t.from === DB_CLIENT_ID) return;           // our own throw bouncing back -- ignore
+        if (!t.ts || t.ts <= dbLastSeenTs) return;      // already reacted to this one, or stale
+        if (Date.now() - t.ts > DB_THROW_MAX_AGE_MS) return; // too old to be a "live" throw
+        dbLastSeenTs = t.ts;
+        if (!dragonBallMode) return;                    // got disarmed in the meantime
+        dbStartFireball(dbOppositeDir(t.dir), typeof t.crossPos === 'number' ? t.crossPos : H/2);
+      } catch(e){}
+    });
+    dbEventSource.onerror = ()=>{
+      // EventSource auto-reconnects on its own; nothing to do here except let it keep trying.
+    };
+  } catch(e){ dbEventSource = null; }
+}
+function dbDisconnectRelay(){
+  if (dbEventSource){ try { dbEventSource.close(); } catch(e){} dbEventSource = null; }
+}
 let fireball = null; // {x,y,vx,vy,startT,rot}
 let dbTrail = [];     // {x,y,age}
 let dbGlyphChars = []; // the ring of matrix characters orbiting the ball's core
@@ -472,6 +518,9 @@ function dbSetArmed(on){
   btn.title = on
     ? 'Dragon Ball mode: ON. Long swipe = throw a fireball to the paired board'
     : 'Dragon Ball mode: off. Tap to arm it, then a quick long swipe throws a fireball to the paired CYD board';
+  // Only watch for incoming throws while actually armed -- same spirit as everything else in
+  // Dragon Ball mode doing nothing at all until you tap this button on.
+  if (on) dbConnectRelay(); else dbDisconnectRelay();
 }
 
 // dir: 'left' | 'right' | 'up' | 'down' -- the edge the ball flies OFF of on this screen.
@@ -480,10 +529,19 @@ function dbSetArmed(on){
 // left edge too (flip this mapping in dbStartFireball()/firmware if your two screens end
 // up sitting mirrored rather than side-by-side the same way round).
 function throwDragonBall(dir, crossPos){
-  dbStartFireball(dir, crossPos);
-  fetch(DB_BOARD_URL + '/throw?dir=' + dir, { mode:'no-cors', cache:'no-store' }).catch(()=>{
-    // board not reachable (not on its WiFi yet, wrong IP, etc.) -- the LOCAL fireball still
-    // plays either way, so a disconnected phone doesn't look like the gesture did nothing.
+  dbStartFireball(dir, crossPos); // local animation plays immediately regardless of network
+  const url = dbFirebaseUrl();
+  if (!url) return; // no relay configured -- local-only, same as before
+  const ts = Date.now();
+  dbLastSeenTs = ts; // don't let our own write come back through the relay and fire twice
+  fetch(url + '/throws/current.json', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir, crossPos, from: DB_CLIENT_ID, ts }),
+    cache: 'no-store'
+  }).catch(()=>{
+    // relay not reachable (offline, Firebase URL wrong, etc.) -- the LOCAL fireball still
+    // played either way, so a disconnected device doesn't look like the gesture did nothing.
   });
 }
 
@@ -1745,6 +1803,7 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsPanel = document.getElementById('settingsPanel');
 const apiKeyInput = document.getElementById('apiKey');
 const modelInput = document.getElementById('modelId');
+const dbFirebaseUrlInput = document.getElementById('dbFirebaseUrlInput');
 
 // Paste your own Gemini API key between the quotes below so you never have to type it
 // in through the settings panel. Only edit this in YOUR OWN saved copy of this file --
@@ -1756,13 +1815,18 @@ function loadSettings(){
   try {
     apiKeyInput.value = localStorage.getItem('matrixVoice.apiKey') || DEFAULT_API_KEY;
     modelInput.value = localStorage.getItem('matrixVoice.model') || 'gemini-3.6-flash';
-  } catch(e){ apiKeyInput.value = DEFAULT_API_KEY; modelInput.value = 'gemini-3.6-flash'; }
+    dbFirebaseUrlInput.value = localStorage.getItem('dragonBall.firebaseUrl') || '';
+  } catch(e){ apiKeyInput.value = DEFAULT_API_KEY; modelInput.value = 'gemini-3.6-flash'; dbFirebaseUrlInput.value = ''; }
 }
 function saveSettings(){
   try {
     localStorage.setItem('matrixVoice.apiKey', apiKeyInput.value.trim());
     localStorage.setItem('matrixVoice.model', modelInput.value.trim() || 'gemini-3.6-flash');
+    localStorage.setItem('dragonBall.firebaseUrl', dbFirebaseUrlInput.value.trim());
   } catch(e){}
+  // If Dragon Ball mode is already armed, re-open the relay connection so a newly-pasted (or
+  // changed) URL takes effect immediately instead of needing to toggle 🐉 off and on again.
+  if (dragonBallMode){ dbDisconnectRelay(); dbConnectRelay(); }
 }
 loadSettings();
 
