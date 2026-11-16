@@ -1985,9 +1985,41 @@ if (SR){
     e.stopPropagation();
     dbgLog('mic tapped, recognizing=' + recognizing);
     unlockSpeech();
-    if (recognizing){ stoppedManually = true; recognizer.stop(); return; }
+    if (recognizing){
+      stoppedManually = true;
+      try { recognizer.stop(); } catch(err){ dbgLog('recognizer.stop() threw: ' + err.message); }
+      // WATCHDOG -- this is the actual fix for "works once, then every later tap does
+      // nothing": iOS Safari can let a recognition session die internally without ever
+      // firing onend, so `recognizing` stays stuck true forever and every tap after that
+      // just calls .stop() on a session that isn't really running -- which does nothing,
+      // visibly. If onend hasn't shown up shortly after we asked it to stop, force the
+      // state back to idle ourselves instead of trusting iOS to tell us.
+      const stale = recognizer;
+      setTimeout(()=>{
+        if (recognizer === stale && recognizing){
+          dbgLog('no onend ' + '700ms after stop() -- forcing reset so the next tap works');
+          try { stale.abort(); } catch(err){}
+          recognizing = false;
+          micBtn.classList.remove('listening');
+          setStatus('live','rain running');
+        }
+      }, 700);
+      return;
+    }
     recognizer = createRecognizer(); // fresh instance every time, see note above
     try { recognizer.start(); } catch(e){ dbgLog('recognizer.start() threw: ' + e.message); }
+    // Same watchdog, other direction: if start() doesn't actually produce onstart shortly,
+    // the session likely died silently too -- since `recognizing` never flips true, the
+    // NEXT tap will still correctly fall into this same "start a new one" branch instead of
+    // getting wedged into the "stop" branch above.
+    const justStarted = recognizer;
+    setTimeout(()=>{
+      if (recognizer === justStarted && !recognizing){
+        dbgLog('no onstart 1500ms after start() -- treating as failed');
+        try { justStarted.abort(); } catch(err){}
+        setStatus('err','mic: no response -- try tapping again');
+      }
+    }, 1500);
   });
 } else {
   micBtn.title = 'speech recognition not supported in this browser -- type instead';
