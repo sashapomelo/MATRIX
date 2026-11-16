@@ -496,8 +496,14 @@ function dbConnectRelay(){
         // NOT dbOppositeDir() here -- that flip was making the ball reverse direction on
         // arrival (left-to-right throw showed up as right-to-left, etc). Using the SAME dir
         // keeps the ball moving the same way it was thrown, which is what you actually want.
-        dbgLog('dbEventSource put: firing incoming fireball, dir=' + t.dir);
-        dbStartFireball(t.dir, typeof t.crossPos === 'number' ? t.crossPos : H/2);
+        // cross comes over the wire as a 0..1 FRACTION along whichever axis this dir uses, not
+        // raw pixels -- every device (PC/phone/CYD) has a different W/H (the CYD's screen is a
+        // fixed 320x240), so a pixel coordinate from one screen is meaningless on another. Map
+        // it onto OUR OWN W/H here instead.
+        const frac = typeof t.cross === 'number' ? t.cross : 0.5;
+        const realCross = (t.dir==='left' || t.dir==='right') ? frac*H : frac*W;
+        dbgLog('dbEventSource put: firing incoming fireball, dir=' + t.dir + ' cross=' + frac.toFixed(2));
+        dbStartFireball(t.dir, realCross);
       } catch(e){ dbgLog('dbEventSource put: parse threw ' + e.message); }
     });
     dbEventSource.onerror = (ev)=>{
@@ -544,11 +550,14 @@ function throwDragonBall(dir, crossPos){
   if (!url){ dbgLog('throwDragonBall: no Firebase URL set -- local-only'); return; }
   const ts = Date.now();
   dbLastSeenTs = ts; // don't let our own write come back through the relay and fire twice
-  dbgLog('throwDragonBall: PUT ' + url + '/throws/current.json dir=' + dir);
+  // Normalize to a 0..1 fraction of whichever axis this dir uses -- see the matching comment
+  // on the receiving side for why raw pixels don't mean anything on a different-sized screen.
+  const cross = (dir==='left' || dir==='right') ? crossPos/H : crossPos/W;
+  dbgLog('throwDragonBall: PUT ' + url + '/throws/current.json dir=' + dir + ' cross=' + cross.toFixed(2));
   fetch(url + '/throws/current.json', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir, crossPos, from: DB_CLIENT_ID, ts }),
+    body: JSON.stringify({ dir, cross, from: DB_CLIENT_ID, ts }),
     cache: 'no-store'
   }).then(res=>{
     dbgLog('throwDragonBall: PUT response ' + res.status);
