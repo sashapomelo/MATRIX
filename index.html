@@ -1931,6 +1931,16 @@ msgInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ unlockSpeech()
    talk through pauses; only the explicit stop actually sends it. */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognizing = false, recognizer = null, finalTranscript = '', stoppedManually = false;
+// iOS Safari: starting a brand-new recognition session too soon after the previous one
+// tore down can come up "started" (onstart/onaudiostart both fire, mic button goes red)
+// while the audio hardware hasn't actually finished releasing from the last session --
+// so it looks like it's listening but never captures a single sample (confirmed from the
+// on-device debug log: onaudiostart fires, then nothing -- not even onspeechstart -- for
+// the whole session). Spacing restarts out by this many ms gives iOS time to actually let
+// go of the mic first. Only matters between sessions, so the very first tap of the page
+// (lastSessionEndAt still 0) is never delayed.
+const MIC_RESTART_GAP_MS = 400;
+let lastSessionEndAt = 0, startPending = false;
 if (SR){
   // iOS Safari: reusing the SAME SpeechRecognition instance across multiple
   // start()/stop() cycles reliably breaks after the first session -- every
@@ -1985,6 +1995,7 @@ if (SR){
       // harm calling resume() on an already-active engine, or on browsers that
       // never needed it) should keep spoken replies working right after a mic turn.
       try { window.speechSynthesis.resume(); dbgLog('speechSynthesis.resume() after mic session'); } catch(e){}
+      lastSessionEndAt = Date.now();
       // Always put the status back to normal here -- previously this only happened
       // when stoppedManually was false, or when manually stopped WITH text to send.
       // A manual stop with nothing transcribed (e.g. you just tapped to cancel, or
@@ -2021,20 +2032,34 @@ if (SR){
       }, 700);
       return;
     }
-    recognizer = createRecognizer(); // fresh instance every time, see note above
-    try { recognizer.start(); } catch(e){ dbgLog('recognizer.start() threw: ' + e.message); }
-    // Same watchdog, other direction: if start() doesn't actually produce onstart shortly,
-    // the session likely died silently too -- since `recognizing` never flips true, the
-    // NEXT tap will still correctly fall into this same "start a new one" branch instead of
-    // getting wedged into the "stop" branch above.
-    const justStarted = recognizer;
-    setTimeout(()=>{
-      if (recognizer === justStarted && !recognizing){
-        dbgLog('no onstart 1500ms after start() -- treating as failed');
-        try { justStarted.abort(); } catch(err){}
-        setStatus('err','mic: no response -- try tapping again');
-      }
-    }, 1500);
+    if (startPending) { dbgLog('mic tapped again while warming up -- ignoring extra tap'); return; }
+    const gap = lastSessionEndAt ? Date.now() - lastSessionEndAt : Infinity;
+    const wait = Math.max(0, MIC_RESTART_GAP_MS - gap);
+    const reallyStart = ()=>{
+      startPending = false;
+      recognizer = createRecognizer(); // fresh instance every time, see note above
+      try { recognizer.start(); } catch(e){ dbgLog('recognizer.start() threw: ' + e.message); }
+      // Same watchdog, other direction: if start() doesn't actually produce onstart shortly,
+      // the session likely died silently too -- since `recognizing` never flips true, the
+      // NEXT tap will still correctly fall into this same "start a new one" branch instead of
+      // getting wedged into the "stop" branch above.
+      const justStarted = recognizer;
+      setTimeout(()=>{
+        if (recognizer === justStarted && !recognizing){
+          dbgLog('no onstart 1500ms after start() -- treating as failed');
+          try { justStarted.abort(); } catch(err){}
+          setStatus('err','mic: no response -- try tapping again');
+        }
+      }, 1500);
+    };
+    if (wait > 0){
+      dbgLog('restarting mic too soon after last session (' + Math.round(gap) + 'ms) -- waiting ' + wait + 'ms so iOS actually releases it first');
+      startPending = true;
+      setStatus('busy','mic: warming up...');
+      setTimeout(reallyStart, wait);
+    } else {
+      reallyStart();
+    }
   });
 } else {
   micBtn.title = 'speech recognition not supported in this browser -- type instead';
