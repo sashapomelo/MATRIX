@@ -137,7 +137,7 @@
   #modeBtn{font-size:12px;font-weight:700;letter-spacing:.02em;}
 
   /* ---------- settings panel ---------- */
-  #settingsPanel{
+  #settingsPanel, #duelPanel{
     position:fixed;
     right:max(16px, env(safe-area-inset-right,0px));
     bottom:calc(max(16px, env(safe-area-inset-bottom,0px)) + 66px);
@@ -151,7 +151,7 @@
     font-size:12.5px;
     color:var(--ink-dim);
   }
-  #settingsPanel h3{
+  #settingsPanel h3, #duelPanel h3{
     margin:0 0 10px;
     font-size:11px;
     letter-spacing:.08em;
@@ -159,8 +159,8 @@
     color:var(--phosphor);
     font-weight:600;
   }
-  #settingsPanel label{display:block;margin:10px 0 4px;color:var(--ink);}
-  #settingsPanel input{
+  #settingsPanel label, #duelPanel label{display:block;margin:10px 0 4px;color:var(--ink);}
+  #settingsPanel input, #duelPanel input{
     width:100%;
     background:rgba(255,255,255,0.03);
     border:1px solid var(--panel-border);
@@ -171,10 +171,10 @@
     padding:7px 8px;
     outline:none;
   }
-  #settingsPanel .hint{margin-top:8px;line-height:1.5;color:var(--ink-dim);}
-  #settingsPanel .hint a{color:var(--phosphor);text-decoration:none;}
-  #settingsPanel .row{display:flex;gap:8px;margin-top:12px;}
-  #settingsPanel button{
+  #settingsPanel .hint, #duelPanel .hint{margin-top:8px;line-height:1.5;color:var(--ink-dim);}
+  #settingsPanel .hint a, #duelPanel .hint a{color:var(--phosphor);text-decoration:none;}
+  #settingsPanel .row, #duelPanel .row{display:flex;gap:8px;margin-top:12px;}
+  #settingsPanel button, #duelPanel button{
     flex:1;
     padding:8px;
     border-radius:8px;
@@ -185,7 +185,23 @@
     font-size:12px;
     cursor:pointer;
   }
-  #settingsPanel button:active{transform:scale(.97);}
+  #settingsPanel button:active, #duelPanel button:active{transform:scale(.97);}
+  /* duel-only bits: big readable room code, live score HUD inside the panel */
+  #duelPanel .roomCode{
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:.12em;
+    color:var(--phosphor);
+    text-align:center;
+    margin:10px 0;
+    user-select:all;
+  }
+  #duelPanel .duelScore{
+    font-size:15px;
+    text-align:center;
+    color:var(--ink);
+    margin:6px 0 2px;
+  }
   [hidden]{display:none!important;}
 
   #hint{
@@ -256,10 +272,45 @@
   </div>
 </div>
 
+<!-- Dragon Ball DUEL -- purely additive, separate from solo Dragon Ball mode above. Uses the
+     same Firebase relay URL (from Settings) but scopes every read/write to a short room code
+     instead of the single shared /throws/current.json path, so strangers following the same
+     link don't collide with each other or with anyone using solo Dragon Ball mode. -->
+<div id="duelPanel" hidden>
+  <h3>Dragon Ball Duel</h3>
+  <div id="duelLobby">
+    <div class="hint">Throw fireballs at a friend over the web -- whoever doesn't tap in time to block takes the hit. First to 5 wins. Needs the same Firebase relay URL set in Settings.</div>
+    <div class="row">
+      <button id="duelStartBtn">Start New Duel</button>
+    </div>
+  </div>
+  <div id="duelJoinOffer" hidden>
+    <div class="hint">You've got a duel invite.</div>
+    <div class="roomCode" id="duelJoinCode">----</div>
+    <div class="row">
+      <button id="duelJoinBtn">Join Duel</button>
+    </div>
+  </div>
+  <div id="duelRoomView" hidden>
+    <div class="hint">Room code / link -- send this to whoever you're playing:</div>
+    <div class="roomCode" id="duelRoomCode">----</div>
+    <input id="duelLinkOut" type="text" readonly spellcheck="false">
+    <div class="row">
+      <button id="duelCopyBtn">Copy Link</button>
+    </div>
+    <div class="duelScore" id="duelScoreText">You 0 &middot; Them 0</div>
+    <div class="hint">Long swipe to throw. Tap anywhere right when an incoming ball reaches you to block it.</div>
+    <div class="row">
+      <button id="duelLeaveBtn">Leave Duel</button>
+    </div>
+  </div>
+</div>
+
 <div id="dock">
   <div id="dockInner">
     <button class="dockBtn" id="modeBtn" title="touch mode: push (P) / pull (G)">P</button>
     <button class="dockBtn" id="dbBtn" title="Dragon Ball mode: off. Tap to arm it, then a quick long swipe throws a fireball to the paired CYD board">🐉</button>
+    <button class="dockBtn" id="duelBtn" title="Dragon Ball Duel: throw fireballs at a friend over a link">🥊</button>
     <input id="msgInput" type="text" placeholder="Speak or type..." autocomplete="off" spellcheck="false">
     <button class="dockBtn" id="micBtn" title="speak">🎤</button>
     <button class="dockBtn" id="sendBtn" title="send">➤</button>
@@ -398,16 +449,18 @@ function handleSwipe(x,y,now){
 
   // Dragon Ball: a "quick, long swipe" is exactly the existing far-swipe case below
   // (dist > redirectThresh, inside the same 450ms window) -- just also throws a fireball
-  // when armed. Checked here, before any of the existing branches, and never changes what
-  // they do: it only reads dist/redirectThresh, never swipeFired or the rain state.
-  if (dragonBallMode && !dbThrowFiredThisGesture && dist > redirectThresh){
+  // when armed (solo mode OR duel mode -- mutually exclusive, see dbSetArmed()/duelLeave()).
+  // Checked here, before any of the existing branches, and never changes what they do: it
+  // only reads dist/redirectThresh, never swipeFired or the rain state.
+  const dbOrDuelArmed = dragonBallMode || duelActive;
+  if (dbOrDuelArmed && !dbThrowFiredThisGesture && dist > redirectThresh){
     dbThrowFiredThisGesture = true;
     const dir = swipeHoriz ? (swipeDir>0 ? 'right' : 'left') : (swipeDir>0 ? 'down' : 'up');
     // the ball enters/exits near where the swipe actually happened, not always dead-center on
     // that edge: for a horizontal swipe the relevant "where" is the finger's current Y, for a
     // vertical swipe it's the current X -- i.e. whatever the CROSS axis is for this swipe.
     const crossPos = swipeHoriz ? y : x;
-    throwDragonBall(dir, crossPos);
+    if (duelActive) duelThrow(dir, crossPos); else throwDragonBall(dir, crossPos);
   }
 
   if (swipeHoriz === rainHoriz && swipeDir === rainDir){
@@ -415,11 +468,11 @@ function handleSwipe(x,y,now){
                                             // this is just a speed pulse, not a direction change,
                                             // so there's nothing for the throw gesture to conflict
                                             // with here. Testing whether it interferes in practice.
-  } else if (!dragonBallMode && swipeHoriz === rainHoriz){
-    // While Dragon Ball mode is armed, this far-swipe-against-the-flow redirect is replaced
-    // entirely by the throw (handled above) -- the rain's direction/axis never changes from a
-    // swipe while armed, so the ball doesn't appear to fly across a rain field that just reset
-    // itself out from under it.
+  } else if (!dbOrDuelArmed && swipeHoriz === rainHoriz){
+    // While Dragon Ball mode (solo or duel) is armed, this far-swipe-against-the-flow redirect
+    // is replaced entirely by the throw (handled above) -- the rain's direction/axis never
+    // changes from a swipe while armed, so the ball doesn't appear to fly across a rain field
+    // that just reset itself out from under it.
     if (dist > redirectThresh){
       rainDir = -rainDir;
       streams.forEach(resetStream);
@@ -428,7 +481,7 @@ function handleSwipe(x,y,now){
       rainVelMod = -0.35;
     }
     swipeFired = true;
-  } else if (!dragonBallMode && dist > redirectThresh){
+  } else if (!dbOrDuelArmed && dist > redirectThresh){
     rainHoriz = swipeHoriz; rainDir = swipeDir;
     buildStreams();
     rainCalm = 0.25; rainVelMod = 1.0;
@@ -536,6 +589,7 @@ const DB_LIFETIME_MS = 900;
 const DB_DURATION_MS = 650; // target crossing time, same on every device -- tune this to taste
 
 function dbSetArmed(on){
+  if (on && duelActive) duelLeave(); // mutual exclusion -- both modes drive the one shared fireball
   dragonBallMode = on;
   const btn = document.getElementById('dbBtn');
   btn.classList.toggle('active', on);
@@ -577,7 +631,15 @@ function throwDragonBall(dir, crossPos){
   });
 }
 
-function dbStartFireball(dir, crossPos){
+// durationMs: optional override of DB_DURATION_MS for this one throw. Nothing that calls this
+// without a 3rd argument changes behavior at all. Duel mode uses this to lag-compensate an
+// INCOMING ball: rather than always animating a full DB_DURATION_MS from the moment the network
+// message arrives (which would make the ball arrive later and later the more latency there was),
+// it passes in whatever time is actually LEFT in the throw's nominal flight (DB_DURATION_MS minus
+// however long the message already took to get here), so the ball's visual position stays
+// anchored to when it was actually thrown, not to when the packet happened to show up.
+function dbStartFireball(dir, crossPos, durationMs){
+  const duration = durationMs || DB_DURATION_MS;
   const pad = 40;
   const MARGIN = 36; // keep it from spawning right in a corner if the swipe ended near one
   let x,y,vx,vy;
@@ -587,14 +649,14 @@ function dbStartFireball(dir, crossPos){
     const dist = W + pad*2;
     // dbTick() below scales velocity by dt/16.7 each frame, i.e. vx/vy are "px per ~16.7ms
     // frame-step" units. Converting a target duration into that same unit: speed = dist /
-    // (DB_DURATION_MS/16.7). Same formula, rearranged to multiply instead of divide twice.
-    const speed = dist * 16.7 / DB_DURATION_MS;
+    // (duration/16.7). Same formula, rearranged to multiply instead of divide twice.
+    const speed = dist * 16.7 / duration;
     const cy = Math.max(MARGIN, Math.min(H-MARGIN, crossPos));
     if (dir==='left'){ x=W+pad; y=cy; vx=-speed; vy=0; }
     else { x=-pad; y=cy; vx=speed; vy=0; }
   } else {
     const dist = H + pad*2;
-    const speed = dist * 16.7 / DB_DURATION_MS;
+    const speed = dist * 16.7 / duration;
     const cx = Math.max(MARGIN, Math.min(W-MARGIN, crossPos));
     if (dir==='up'){ x=cx; y=H+pad; vx=0; vy=-speed; }
     else { x=cx; y=-pad; vx=0; vy=speed; }
@@ -688,6 +750,203 @@ function dbMaybeExpire(now){
       fireball.x < -60 || fireball.x > W+60 || fireball.y < -60 || fireball.y > H+60){
     fireball = null; dbTrail = [];
   }
+}
+
+/* ======================================================================
+   DRAGON BALL DUEL -- purely additive, on top of everything above. Two
+   people each open this same page (one starts, one follows the link/code)
+   and throw fireballs at each other for real: whoever doesn't tap in time
+   to block an incoming ball takes a hit. Reuses dbStartFireball()/fireball/
+   dbTrail for the visuals and the same Firebase relay URL from Settings,
+   but every read/write is scoped under a short room code so strangers
+   following the same shared link never collide with each other or with
+   anyone using solo Dragon Ball mode (which is untouched by any of this --
+   see the mutual-exclusion guards in dbSetArmed()/duelLeave() below).
+   ====================================================================== */
+let duelActive = false;
+let duelRoom = '';
+let duelRole = ''; // 'host' | 'guest'
+let duelThrowSource = null, duelScoreASource = null, duelScoreBSource = null;
+let duelLastSeenThrowTs = 0; // own-echo suppression, room-scoped (separate from solo dbLastSeenTs)
+let duelScoreA = 0, duelScoreB = 0; // hitsTaken by host / by guest, synced from Firebase
+let duelMyHitsTaken = 0;           // my own running count -- only I ever write my own slot
+const DUEL_WIN_SCORE = 5;
+const DUEL_CATCH_WINDOW_MS = 180;  // +/- this many ms around the ball's true predicted arrival
+// Tracks the one incoming ball I can currently try to block, if any. "deadline" is a
+// performance.now()-based timestamp for when the ball's flight (already lag-compensated,
+// see duelHandleIncomingThrow) finishes -- i.e. the moment I actually need to tap near.
+let duelIncoming = { active:false, deadline:0, caught:false };
+let duelFlashMsg = '', duelFlashUntil = 0;
+
+function duelFlash(text){ duelFlashMsg = text; duelFlashUntil = performance.now() + 1200; }
+
+const DUEL_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I -- easy to read aloud/type
+function duelGenRoomCode(){
+  let code = '';
+  for (let i=0;i<4;i++) code += DUEL_CODE_ALPHABET[(Math.random()*DUEL_CODE_ALPHABET.length)|0];
+  return code;
+}
+function duelRoomUrlFor(code){ return location.origin + location.pathname + '?room=' + code; }
+
+function duelShowView(which){ // 'lobby' | 'joinOffer' | 'room'
+  document.getElementById('duelLobby').hidden = which !== 'lobby';
+  document.getElementById('duelJoinOffer').hidden = which !== 'joinOffer';
+  document.getElementById('duelRoomView').hidden = which !== 'room';
+}
+
+function duelConnect(){
+  const url = dbFirebaseUrl();
+  duelActive = true;
+  if (!url){ dbgLog('duelConnect: no Firebase URL set -- duel needs one, nothing will reach the other side'); return; }
+  duelLastSeenThrowTs = Date.now();
+  duelThrowSource = new EventSource(url + '/rooms/' + duelRoom + '/throws/current.json');
+  duelThrowSource.addEventListener('put', (ev)=>{
+    try {
+      const msg = JSON.parse(ev.data);
+      const t = msg && msg.data;
+      if (!t || typeof t !== 'object') return;
+      if (t.from === DB_CLIENT_ID) return; // ignore our own throw coming back
+      if (!t.ts || t.ts <= duelLastSeenThrowTs) return;
+      duelLastSeenThrowTs = t.ts;
+      duelHandleIncomingThrow(t);
+    } catch(e){ dbgLog('duelThrowSource put threw ' + e.message); }
+  });
+  duelThrowSource.onerror = ()=>{ dbgLog('duelThrowSource onerror, readyState=' + duelThrowSource.readyState); };
+
+  duelScoreASource = new EventSource(url + '/rooms/' + duelRoom + '/scoreA.json');
+  duelScoreASource.addEventListener('put', (ev)=>{
+    try { const msg = JSON.parse(ev.data); duelScoreA = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); }
+    catch(e){}
+  });
+  duelScoreBSource = new EventSource(url + '/rooms/' + duelRoom + '/scoreB.json');
+  duelScoreBSource.addEventListener('put', (ev)=>{
+    try { const msg = JSON.parse(ev.data); duelScoreB = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); }
+    catch(e){}
+  });
+}
+function duelDisconnect(){
+  [duelThrowSource, duelScoreASource, duelScoreBSource].forEach(es=>{ if (es) try{ es.close(); }catch(e){} });
+  duelThrowSource = duelScoreASource = duelScoreBSource = null;
+  duelActive = false;
+  duelIncoming.active = false;
+}
+
+function duelStartHost(){
+  if (dragonBallMode) dbSetArmed(false); // mutual exclusion -- see dbSetArmed()
+  duelRoom = duelGenRoomCode(); duelRole = 'host';
+  duelScoreA = 0; duelScoreB = 0; duelMyHitsTaken = 0;
+  history.replaceState(null, '', '?room=' + duelRoom);
+  duelConnect();
+  duelRenderRoom();
+}
+function duelJoinAsGuest(code){
+  if (dragonBallMode) dbSetArmed(false);
+  duelRoom = code; duelRole = 'guest';
+  duelScoreA = 0; duelScoreB = 0; duelMyHitsTaken = 0;
+  history.replaceState(null, '', '?room=' + duelRoom);
+  duelConnect();
+  duelRenderRoom();
+}
+function duelLeave(){
+  duelDisconnect();
+  duelRoom = ''; duelRole = '';
+  history.replaceState(null, '', location.pathname);
+  duelShowView('lobby');
+}
+function duelRenderRoom(){
+  document.getElementById('duelRoomCode').textContent = duelRoom;
+  document.getElementById('duelLinkOut').value = duelRoomUrlFor(duelRoom);
+  duelUpdateHud();
+  duelShowView('room');
+}
+
+function duelUpdateHud(){
+  const my = duelRole === 'host' ? duelScoreB : duelScoreA;
+  const their = duelRole === 'host' ? duelScoreA : duelScoreB;
+  const el = document.getElementById('duelScoreText');
+  if (el) el.textContent = 'You ' + my + ' · Them ' + their;
+  if (my >= DUEL_WIN_SCORE || their >= DUEL_WIN_SCORE) duelFlash(my > their ? 'You win!' : 'You lose');
+}
+
+// dir/crossPos mean exactly what they mean for solo throwDragonBall() -- same local-preview-first
+// pattern, just PUTting to this room's own throws path instead of the single shared global one.
+function duelThrow(dir, crossPos){
+  dbStartFireball(dir, crossPos); // local preview, full DB_DURATION_MS -- I'm the thrower, not catching
+  const url = dbFirebaseUrl();
+  if (!url) return;
+  const ts = Date.now();
+  duelLastSeenThrowTs = ts;
+  const cross = (dir==='left' || dir==='right') ? crossPos/H : crossPos/W;
+  fetch(url + '/rooms/' + duelRoom + '/throws/current.json', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir, cross, from: DB_CLIENT_ID, ts }),
+    cache: 'no-store'
+  }).catch(e=>{ dbgLog('duelThrow PUT threw ' + e.message); });
+}
+
+function duelHandleIncomingThrow(t){
+  // One ball in flight at a time -- if a throw is already incoming and unresolved, drop this
+  // new one rather than overwriting duelIncoming mid-flight (which would corrupt the first
+  // throw's own pending resolution). Same "ignore it, don't crash" spirit as everywhere else
+  // in this file when something arrives faster than it can be handled.
+  if (duelIncoming.active) return;
+  const frac = typeof t.cross === 'number' ? t.cross : 0.5;
+  const realCross = (t.dir==='left' || t.dir==='right') ? frac*H : frac*W;
+  // Lag compensation: don't always play a full DB_DURATION_MS from "now" (that would make the
+  // ball arrive later and later the more latency there is) -- play only whatever's actually LEFT
+  // of its nominal flight, so the ball's position stays anchored to when it was really thrown.
+  // Clamped to a floor so a very late/jittery packet still gives something tappable rather than
+  // an instant, unreactable jump-cut.
+  const elapsed = Date.now() - t.ts;
+  const remaining = Math.max(120, DB_DURATION_MS - elapsed);
+  dbStartFireball(t.dir, realCross, remaining);
+  const deadline = performance.now() + remaining;
+  duelIncoming = { active:true, deadline, caught:false };
+  setTimeout(duelResolveIncoming, remaining + DUEL_CATCH_WINDOW_MS + 40);
+}
+function duelTryCatch(now){
+  if (!duelIncoming.active || duelIncoming.caught) return;
+  if (Math.abs(now - duelIncoming.deadline) <= DUEL_CATCH_WINDOW_MS){
+    duelIncoming.caught = true;
+    fireball = null; dbTrail = []; // deflected -- gone immediately, doesn't finish crossing
+  }
+}
+function duelResolveIncoming(){
+  if (!duelIncoming.active) return;
+  const caught = duelIncoming.caught;
+  duelIncoming.active = false;
+  if (caught){ duelFlash('Blocked!'); return; }
+  duelFlash('Hit!');
+  duelMyHitsTaken++;
+  const url = dbFirebaseUrl();
+  if (!url || !duelRoom) return;
+  const field = duelRole === 'host' ? 'scoreA' : 'scoreB';
+  fetch(url + '/rooms/' + duelRoom + '/' + field + '.json', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(duelMyHitsTaken),
+    cache: 'no-store'
+  }).catch(e=>{ dbgLog('duelResolveIncoming PUT threw ' + e.message); });
+}
+
+function duelDrawHud(now){
+  if (!duelActive) return;
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.font = `700 13px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = 'rgba(200,255,210,0.85)';
+  const my = duelRole === 'host' ? duelScoreB : duelScoreA;
+  const their = duelRole === 'host' ? duelScoreA : duelScoreB;
+  ctx.fillText('You ' + my + ' · Them ' + their, W/2, 10);
+  if (duelFlashMsg && now < duelFlashUntil){
+    ctx.font = `700 20px 'JetBrains Mono', monospace`;
+    ctx.fillStyle = '#ffd04a';
+    ctx.fillText(duelFlashMsg, W/2, 30);
+  } else if (duelFlashMsg){
+    duelFlashMsg = '';
+  }
+  ctx.restore();
 }
 
 let burstParticles = null, burstFrame = 0;
@@ -801,6 +1060,9 @@ function crossOf(x,y){ return rainHoriz ? y : x; }
 function flowOf(x,y){ return rainHoriz ? x : y; }
 
 canvas.addEventListener('pointerdown', (e)=>{
+  if (duelActive) duelTryCatch(performance.now()); // additive -- never returns/consumes the event,
+                                                    // so every existing gesture below still runs
+                                                    // exactly as it always has, duel or not.
   canvas.setPointerCapture(e.pointerId);
   if (pointers.size >= 2){ return; } // ignore a third finger, keep the first two
   pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
@@ -1808,6 +2070,7 @@ function frame(){
   drawMessageOverlay(now);
   drawFireball();
   dbMaybeExpire(now);
+  duelDrawHud(now); // no-op unless a duel is active -- draws over everything else, like the status bar
   requestAnimationFrame(frame);
 }
 
@@ -1907,6 +2170,50 @@ document.getElementById('settingsSave').addEventListener('pointerdown', (e)=>{
   document.getElementById(id).addEventListener('pointerdown', e=>e.stopPropagation());
 });
 document.getElementById('dockInner').addEventListener('pointerdown', e=>e.stopPropagation());
+
+/* Dragon Ball Duel UI wiring -- purely additive, same stopPropagation-on-the-panel pattern as
+   the settings panel above, so a tap inside it never falls through to the canvas/rain. */
+const duelPanel = document.getElementById('duelPanel');
+const duelBtn = document.getElementById('duelBtn');
+duelPanel.addEventListener('pointerdown', e=>e.stopPropagation());
+duelBtn.addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+  duelPanel.hidden = !duelPanel.hidden;
+  if (!duelPanel.hidden) duelShowView(duelRoom ? 'room' : 'lobby');
+});
+document.getElementById('duelStartBtn').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); duelStartHost(); });
+document.getElementById('duelJoinBtn').addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+  const code = document.getElementById('duelJoinCode').textContent;
+  duelJoinAsGuest(code);
+});
+document.getElementById('duelLeaveBtn').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); duelLeave(); });
+document.getElementById('duelCopyBtn').addEventListener('pointerdown', (e)=>{
+  e.stopPropagation();
+  const input = document.getElementById('duelLinkOut');
+  input.select();
+  try {
+    navigator.clipboard.writeText(input.value);
+    setStatus('live', 'duel link copied');
+  } catch(err){
+    document.execCommand('copy'); // older/odder browsers without the async Clipboard API
+  }
+});
+document.getElementById('duelLinkOut').addEventListener('pointerdown', e=>e.stopPropagation());
+
+// ?room=XXXX in the URL -- someone followed a duel link. Show the join offer rather than
+// connecting immediately, so opening the link never silently starts a network connection
+// with no feedback; one tap on "Join Duel" is all it takes from there.
+(function duelCheckUrlInvite(){
+  try {
+    const code = new URLSearchParams(location.search).get('room');
+    if (code){
+      document.getElementById('duelJoinCode').textContent = code.toUpperCase();
+      duelPanel.hidden = false;
+      duelShowView('joinOffer');
+    }
+  } catch(e){}
+})();
 
 async function askMatrix(question){
   const key = (localStorage.getItem('matrixVoice.apiKey') || DEFAULT_API_KEY || '').trim();
