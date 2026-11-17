@@ -525,7 +525,15 @@ const DB_GLYPH_R = 11;       // orbit radius of the glyph ring
 const DB_DESTROY_R = 26;     // inside this: a rain glyph is consumed outright (not drawn)
 const DB_SWIRL_R = 95;       // inside this (and outside DESTROY_R): glyphs get pulled into the vortex
 const DB_LIFETIME_MS = 900;
-const DB_SPEED = 26; // px/frame-ish, scaled by dt below
+// Old approach was a flat px/frame speed (DB_SPEED=26), applied identically on every device.
+// That's exactly what caused the "no continuity" problem: a narrow iPhone screen is only
+// ~400px wide so the ball crossed it almost instantly, while a wide 16:9 PC browser window
+// can be 1800+px wide, so the SAME px-per-frame speed took 4-5x longer to cross it. Throwing
+// felt fast-and-snappy on the phone and slow-and-laggy on the PC, in both directions.
+// Fix: pick a fixed wall-clock DURATION for the crossing instead, and compute each device's
+// own speed from its own screen size so every screen takes the same ~DB_DURATION_MS to
+// cross, regardless of how physically wide or narrow that screen is.
+const DB_DURATION_MS = 650; // target crossing time, same on every device -- tune this to taste
 
 function dbSetArmed(on){
   dragonBallMode = on;
@@ -574,13 +582,22 @@ function dbStartFireball(dir, crossPos){
   const MARGIN = 36; // keep it from spawning right in a corner if the swipe ended near one
   let x,y,vx,vy;
   if (dir==='left' || dir==='right'){
+    // Full distance this screen's ball has to travel to get from one spawn edge to the
+    // other, in px -- a wide PC window has a much bigger number here than a narrow phone.
+    const dist = W + pad*2;
+    // dbTick() below scales velocity by dt/16.7 each frame, i.e. vx/vy are "px per ~16.7ms
+    // frame-step" units. Converting a target duration into that same unit: speed = dist /
+    // (DB_DURATION_MS/16.7). Same formula, rearranged to multiply instead of divide twice.
+    const speed = dist * 16.7 / DB_DURATION_MS;
     const cy = Math.max(MARGIN, Math.min(H-MARGIN, crossPos));
-    if (dir==='left'){ x=W+pad; y=cy; vx=-DB_SPEED; vy=0; }
-    else { x=-pad; y=cy; vx=DB_SPEED; vy=0; }
+    if (dir==='left'){ x=W+pad; y=cy; vx=-speed; vy=0; }
+    else { x=-pad; y=cy; vx=speed; vy=0; }
   } else {
+    const dist = H + pad*2;
+    const speed = dist * 16.7 / DB_DURATION_MS;
     const cx = Math.max(MARGIN, Math.min(W-MARGIN, crossPos));
-    if (dir==='up'){ x=cx; y=H+pad; vx=0; vy=-DB_SPEED; }
-    else { x=cx; y=-pad; vx=0; vy=DB_SPEED; }
+    if (dir==='up'){ x=cx; y=H+pad; vx=0; vy=-speed; }
+    else { x=cx; y=-pad; vx=0; vy=speed; }
   }
   fireball = { x, y, vx, vy, startT: performance.now(), rot:0 };
   dbTrail = [];
