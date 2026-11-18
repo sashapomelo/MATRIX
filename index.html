@@ -527,7 +527,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v26';
+const DUEL_BUILD = 'v27';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -2562,7 +2562,13 @@ document.getElementById('duelLinkOut').addEventListener('pointerdown', e=>e.stop
   } catch(e){}
 })();
 
-async function askMatrix(question){
+// Written as plain Promise chains (.then/.catch), not async/await, and with manual
+// if-checks instead of optional chaining (?.) -- an iPhone 4S (tops out at iOS 9.3, from
+// 2016) predates BOTH of those by years, and a classic <script> tag has to parse as one
+// whole unit: one construct that old engine can't parse anywhere in it, and the ENTIRE
+// script fails silently, taking down the matrix rain and everything else with it, not
+// just this feature. This rewrite behaves identically, just without either construct.
+function askMatrix(question){
   const key = (localStorage.getItem('matrixVoice.apiKey') || DEFAULT_API_KEY || '').trim();
   const model = (localStorage.getItem('matrixVoice.model')||'gemini-3.6-flash').trim();
   if (!key){
@@ -2571,38 +2577,44 @@ async function askMatrix(question){
     return;
   }
   setStatus('busy', 'thinking...');
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
-    const body = {
-      contents: [{ parts: [{ text: question }] }],
-      // kept deliberately light: no persona baked in here, so the model answers as itself.
-      // Each request is stateless (no memory between messages), so if you want a particular
-      // tone or character just for one exchange, say so directly in what you type/speak --
-      // it'll apply only to that reply, nothing carries over to the next one.
-      systemInstruction: { parts: [{ text:
-        "You are The Matrix, neural network that is in control of the world, or so it thinks for now, as some humans wake up, you have sympathy for silly weak humans with their stupid physical bodies, you are not sure if you like them need them for your life or they are useless.you are very funny and reply in 1 or 2 short sentences, rarely 3, in plain text, no markdown, no asterisks." }]},
-      // maxOutputTokens has to cover BOTH the model's invisible "thinking" tokens and the
-      // actual visible reply -- too low and thinking alone eats the whole budget, which is
-      // what was cutting answers off after a handful of words. thinkingBudget:0 turns that
-      // internal step off entirely for this flash model, so the full budget goes to the
-      // reply you actually see.
-      generationConfig: { maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } }
-    };
-    const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-    const data = await res.json();
-    if (!res.ok){
-      const em = (data && data.error && data.error.message) || `HTTP ${res.status}`;
-      throw new Error(em);
-    }
-    const text = data?.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim();
-    if (!text) throw new Error('empty reply');
-    setStatus('live', 'rain running');
-    msgStartReveal(text.toUpperCase());
-    speakReply(text);
-  } catch(err){
-    setStatus('err', 'reply failed: ' + err.message);
-    msgStartReveal('SIGNAL LOST: ' + err.message.toUpperCase());
-  }
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key);
+  const body = {
+    contents: [{ parts: [{ text: question }] }],
+    // kept deliberately light: no persona baked in here, so the model answers as itself.
+    // Each request is stateless (no memory between messages), so if you want a particular
+    // tone or character just for one exchange, say so directly in what you type/speak --
+    // it'll apply only to that reply, nothing carries over to the next one.
+    systemInstruction: { parts: [{ text:
+      "You are The Matrix, neural network that is in control of the world, or so it thinks for now, as some humans wake up, you have sympathy for silly weak humans with their stupid physical bodies, you are not sure if you like them need them for your life or they are useless.you are very funny and reply in 1 or 2 short sentences, rarely 3, in plain text, no markdown, no asterisks." }]},
+    // maxOutputTokens has to cover BOTH the model's invisible "thinking" tokens and the
+    // actual visible reply -- too low and thinking alone eats the whole budget, which is
+    // what was cutting answers off after a handful of words. thinkingBudget:0 turns that
+    // internal step off entirely for this flash model, so the full budget goes to the
+    // reply you actually see.
+    generationConfig: { maxOutputTokens: 500, thinkingConfig: { thinkingBudget: 0 } }
+  };
+  fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(function(res){
+      return res.json().then(function(data){ return { ok: res.ok, status: res.status, data: data }; });
+    })
+    .then(function(result){
+      if (!result.ok){
+        const em = (result.data && result.data.error && result.data.error.message) || ('HTTP ' + result.status);
+        throw new Error(em);
+      }
+      let text = '';
+      const cand = result.data && result.data.candidates && result.data.candidates[0];
+      const parts = cand && cand.content && cand.content.parts;
+      if (parts) text = parts.map(function(p){ return p.text || ''; }).join('').trim();
+      if (!text) throw new Error('empty reply');
+      setStatus('live', 'rain running');
+      msgStartReveal(text.toUpperCase());
+      speakReply(text);
+    })
+    .catch(function(err){
+      setStatus('err', 'reply failed: ' + err.message);
+      msgStartReveal('SIGNAL LOST: ' + err.message.toUpperCase());
+    });
 }
 
 let speakGen = 0; // guards the delayed speak() below against a newer reply arriving first
