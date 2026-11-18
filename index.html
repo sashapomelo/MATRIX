@@ -254,7 +254,7 @@
 <!-- TEMPORARY debug log -- shows every mic/speech event with a timestamp, kept on
      screen (not overwritten like the status bar) so it can just be screenshotted.
      Safe to remove once iOS speech/mic is sorted out. -->
-<div id="dbgPanel"></div>
+<div id="dbgPanel" hidden></div>
 
 <div id="settingsPanel" hidden>
   <h3>Matrix Voice</h3>
@@ -265,7 +265,7 @@
   <div class="hint">Stored only in this browser. Get a free key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>. If replies stop working, that page will show the current free model id — paste it above.</div>
   <label for="dbFirebaseUrlInput">Dragon Ball relay (Firebase URL)</label>
   <input id="dbFirebaseUrlInput" type="text" placeholder="https://your-project-default-rtdb.firebaseio.com" autocomplete="off" spellcheck="false">
-  <div class="hint">Same URL pasted into every device (PC/phone/CYD) that should be able to throw to or receive from each other. Leave blank to keep the fireball animation local-only.</div>
+  <div class="hint">Already set to a working default, so you don't need to touch this. Only use this field to point your OWN copy of this file at a different Firebase project.</div>
   <div class="row">
     <button id="settingsSave">Save</button>
     <button id="settingsClose">Close</button>
@@ -508,12 +508,18 @@ let dbThrowFiredThisGesture = false;
 // a direct HTTP call to a board on the same LAN -- that sidesteps the whole mixed-content /
 // same-WiFi / hotspot-joining mess entirely: PC, phone and the CYD board each just need SOME
 // working internet connection (any WiFi, cellular, doesn't matter) and watch the same shared
-// value. Empty by default on purpose -- until you paste your Realtime Database's URL into the
-// "Dragon Ball relay" field in Settings (e.g. https://your-project-default-rtdb.firebaseio.com),
-// Dragon Ball mode still works for the LOCAL fireball animation, it just never reaches another
-// device. Read fresh each time (not cached in a const) so saving Settings takes effect on the
-// very next throw/arm, no page reload needed.
-function dbFirebaseUrl(){ return (localStorage.getItem('dragonBall.firebaseUrl') || '').replace(/\/$/,''); }
+// value. Baked in below so anyone you send a duel link to can just paste it and play, with no
+// Settings step of their own -- edit this to point at your OWN Realtime Database before sharing
+// this file publicly (anyone with this URL can read/write anything in it -- see the comment on
+// DEFAULT_FIREBASE_URL). The Settings field still works and still wins if someone pastes their
+// own URL there (e.g. to point at a different/private Firebase project); this is only the
+// fallback for everyone who never touches that field. Read fresh each time (not cached in a
+// const) so saving Settings takes effect on the very next throw/arm, no page reload needed.
+const DEFAULT_FIREBASE_URL = "https://matrix-130c8-default-rtdb.firebaseio.com"; // <-- change this to your own project's URL if you fork this file
+function dbFirebaseUrl(){
+  const saved = (localStorage.getItem('dragonBall.firebaseUrl') || '').trim();
+  return (saved || DEFAULT_FIREBASE_URL).replace(/\/$/,'');
+}
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
 // (Firebase pushes every write back out to every listener, including the one that wrote it).
 const DB_CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
