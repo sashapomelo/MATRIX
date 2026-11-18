@@ -583,7 +583,13 @@ const DB_GLYPH_N = 9;
 const DB_GLYPH_R = 11;       // orbit radius of the glyph ring
 const DB_DESTROY_R = 26;     // inside this: a rain glyph is consumed outright (not drawn)
 const DB_SWIRL_R = 95;       // inside this (and outside DESTROY_R): glyphs get pulled into the vortex
-const DB_LIFETIME_MS = 900;
+// Safety cap -- force-deletes the fireball if it's somehow still alive this long (e.g. it never
+// reached an edge for some reason). MUST stay well above DB_DURATION_MS (the ball's own normal
+// flight time, further down) plus the duel catch window -- otherwise this cap fires FIRST and
+// deletes the ball just before the catch window even arrives, making every throw unblockable
+// (this is exactly what happened when DB_DURATION_MS got tuned up to 950 without raising this
+// to match). Comfortably oversized on purpose so tuning DB_DURATION_MS doesn't retrigger it.
+const DB_LIFETIME_MS = 2200;
 // Old approach was a flat px/frame speed (DB_SPEED=26), applied identically on every device.
 // That's exactly what caused the "no continuity" problem: a narrow iPhone screen is only
 // ~400px wide so the ball crossed it almost instantly, while a wide 16:9 PC browser window
