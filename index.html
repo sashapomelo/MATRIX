@@ -681,8 +681,13 @@ function dbStartFireball(dir, crossPos, durationMs){
 function dbTick(dt){
   if (!fireball) return;
   const step = dt/16.7;
-  fireball.x += fireball.vx * step;
-  fireball.y += fireball.vy * step;
+  // While held, position comes from the finger (see the pointermove hook), not from vx/vy --
+  // vx/vy are left untouched so duelReleaseThrow() can still read the ball's original direction
+  // off them at release time.
+  if (!duelHeld){
+    fireball.x += fireball.vx * step;
+    fireball.y += fireball.vy * step;
+  }
   fireball.rot += 0.12 * step; // ring spin speed
   dbTrail.push({ x:fireball.x, y:fireball.y, age:0 });
   for (const t of dbTrail) t.age++;
@@ -752,6 +757,7 @@ function drawFireball(){
 
 function dbMaybeExpire(now){
   if (!fireball) return;
+  if (duelHeld) return; // a held ball never expires, however long it's carried
   if (now - fireball.startT > DB_LIFETIME_MS ||
       fireball.x < -60 || fireball.x > W+60 || fireball.y < -60 || fireball.y > H+60){
     fireball = null; dbTrail = [];
@@ -783,9 +789,37 @@ const DUEL_CATCH_RADIUS = 50;      // px -- tap has to land within this of the b
 // performance.now()-based timestamp for when the ball's flight (already lag-compensated,
 // see duelHandleIncomingThrow) finishes -- i.e. the moment I actually need to tap near.
 let duelIncoming = { active:false, deadline:0, caught:false };
+let duelHeld = false, duelHeldPointerId = null; // true while a caught ball is stuck to a finger
 let duelFlashMsg = '', duelFlashUntil = 0;
 
 function duelFlash(text){ duelFlashMsg = text; duelFlashUntil = performance.now() + 1200; }
+
+// How far MY device's clock disagrees with Firebase's own server clock, in ms (serverTime -
+// Date.now()). This is the actual fix for two symptoms that looked unrelated but had the same
+// cause: throws reaching one side but not the other, and the fireball flying "insanely fast" on
+// whichever device's clock was most off. Every throw's ts used to be each device's own raw
+// Date.now() -- compared directly against ANOTHER device's raw Date.now() for "is this throw
+// stale" and "how much of its flight is already spent". If a phone and a PC disagree by even a
+// couple of seconds (common -- PCs drift more than phones), that comparison is just wrong: a
+// throw can look like it arrived already-stale and get silently dropped, or look like it took
+// several seconds longer than it really did, slashing its remaining animation time down near the
+// clamp floor -- i.e. "flies insanely fast". Calibrating once against Firebase's OWN clock (which
+// both devices agree is the single source of truth) removes the device-to-device comparison
+// entirely. Every throw's own ts is also now server-assigned (see duelThrow/duelReleaseThrow's
+// ts: {'.sv':'timestamp'}), so only the RECEIVING side's offset matters at all.
+let duelClockOffsetMs = 0;
+function duelServerNow(){ return Date.now() + duelClockOffsetMs; }
+function duelCalibrateClock(url){
+  return fetch(url + '/rooms/' + duelRoom + '/_clockPing.json', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({'.sv':'timestamp'}), cache:'no-store'
+  }).then(r=>r.json()).then(serverTs=>{
+    if (typeof serverTs === 'number'){
+      duelClockOffsetMs = serverTs - Date.now();
+      dbgLog('duelCalibrateClock: offset=' + duelClockOffsetMs + 'ms');
+    }
+  }).catch(e=>{ dbgLog('duelCalibrateClock threw ' + e.message); }); // non-fatal -- proceeds with offset 0
+}
 
 const DUEL_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O or 1/I -- easy to read aloud/type
 function duelGenRoomCode(){
@@ -805,30 +839,35 @@ function duelConnect(){
   const url = dbFirebaseUrl();
   duelActive = true;
   if (!url){ dbgLog('duelConnect: no Firebase URL set -- duel needs one, nothing will reach the other side'); return; }
-  duelLastSeenThrowTs = Date.now();
-  duelThrowSource = new EventSource(url + '/rooms/' + duelRoom + '/throws/current.json');
-  duelThrowSource.addEventListener('put', (ev)=>{
-    try {
-      const msg = JSON.parse(ev.data);
-      const t = msg && msg.data;
-      if (!t || typeof t !== 'object') return;
-      if (t.from === DB_CLIENT_ID) return; // ignore our own throw coming back
-      if (!t.ts || t.ts <= duelLastSeenThrowTs) return;
-      duelLastSeenThrowTs = t.ts;
-      duelHandleIncomingThrow(t);
-    } catch(e){ dbgLog('duelThrowSource put threw ' + e.message); }
-  });
-  duelThrowSource.onerror = ()=>{ dbgLog('duelThrowSource onerror, readyState=' + duelThrowSource.readyState); };
+  // Calibrate against Firebase's clock FIRST, then open the listeners -- see
+  // duelCalibrateClock's comment for why. Listeners still open even if the calibration ping
+  // itself fails (falls back to offset 0, same as before this fix existed).
+  duelCalibrateClock(url).then(()=>{
+    duelLastSeenThrowTs = duelServerNow();
+    duelThrowSource = new EventSource(url + '/rooms/' + duelRoom + '/throws/current.json');
+    duelThrowSource.addEventListener('put', (ev)=>{
+      try {
+        const msg = JSON.parse(ev.data);
+        const t = msg && msg.data;
+        if (!t || typeof t !== 'object') return;
+        if (t.from === DB_CLIENT_ID) return; // ignore our own throw coming back
+        if (!t.ts || t.ts <= duelLastSeenThrowTs) return;
+        duelLastSeenThrowTs = t.ts;
+        duelHandleIncomingThrow(t);
+      } catch(e){ dbgLog('duelThrowSource put threw ' + e.message); }
+    });
+    duelThrowSource.onerror = ()=>{ dbgLog('duelThrowSource onerror, readyState=' + duelThrowSource.readyState); };
 
-  duelScoreASource = new EventSource(url + '/rooms/' + duelRoom + '/scoreA.json');
-  duelScoreASource.addEventListener('put', (ev)=>{
-    try { const msg = JSON.parse(ev.data); duelScoreA = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); }
-    catch(e){}
-  });
-  duelScoreBSource = new EventSource(url + '/rooms/' + duelRoom + '/scoreB.json');
-  duelScoreBSource.addEventListener('put', (ev)=>{
-    try { const msg = JSON.parse(ev.data); duelScoreB = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); }
-    catch(e){}
+    duelScoreASource = new EventSource(url + '/rooms/' + duelRoom + '/scoreA.json');
+    duelScoreASource.addEventListener('put', (ev)=>{
+      try { const msg = JSON.parse(ev.data); duelScoreA = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); }
+      catch(e){}
+    });
+    duelScoreBSource = new EventSource(url + '/rooms/' + duelRoom + '/scoreB.json');
+    duelScoreBSource.addEventListener('put', (ev)=>{
+      try { const msg = JSON.parse(ev.data); duelScoreB = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); }
+      catch(e){}
+    });
   });
 }
 function duelDisconnect(){
@@ -886,13 +925,14 @@ function duelThrow(dir, crossPos){
   dbStartFireball(dir, crossPos); // local preview, full DB_DURATION_MS -- I'm the thrower, not catching
   const url = dbFirebaseUrl();
   if (!url) return;
-  const ts = Date.now();
-  duelLastSeenThrowTs = ts;
+  duelLastSeenThrowTs = duelServerNow(); // best local estimate, just for our own echo bookkeeping
   const cross = (dir==='left' || dir==='right') ? crossPos/H : crossPos/W;
   fetch(url + '/rooms/' + duelRoom + '/throws/current.json', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir, cross, from: DB_CLIENT_ID, ts }),
+    // ts is stamped by FIREBASE ITSELF ({".sv":"timestamp"}), not our own clock -- see
+    // duelCalibrateClock's comment. Means the thrower's own clock never enters the equation.
+    body: JSON.stringify({ dir, cross, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} }),
     cache: 'no-store'
   }).catch(e=>{ dbgLog('duelThrow PUT threw ' + e.message); });
 }
@@ -916,7 +956,7 @@ function duelHandleIncomingThrow(t){
   // of its nominal flight, so the ball's position stays anchored to when it was really thrown.
   // Clamped to a floor so a very late/jittery packet still gives something tappable rather than
   // an instant, unreactable jump-cut.
-  const elapsed = Date.now() - t.ts;
+  const elapsed = duelServerNow() - t.ts;
   const remaining = Math.max(120, DB_DURATION_MS - elapsed);
   dbStartFireball(recvDir, realCross, remaining);
   const deadline = performance.now() + remaining;
@@ -926,21 +966,62 @@ function duelHandleIncomingThrow(t){
 // A catch now needs BOTH the right moment AND the right spot -- tapping anywhere on screen in
 // time no longer counts. x,y are the tap's actual screen coordinates, compared against the
 // fireball's real current position (it's still moving, so this has to track where it actually
-// is right now, not where it started or where it'll end up).
-function duelTryCatch(now, x, y){
+// is right now, not where it started or where it'll end up). A successful catch no longer just
+// deletes the ball -- it switches to HELD: the ball sticks to that finger/pointer, following it
+// around (see the pointermove hook below) until the finger lifts, at which point duelReleaseThrow()
+// sends it right back out the way it came. The duel keeps going until someone actually misses.
+function duelTryCatch(now, x, y, pointerId){
   if (!duelIncoming.active || duelIncoming.caught) return;
   if (Math.abs(now - duelIncoming.deadline) > DUEL_CATCH_WINDOW_MS) return; // wrong moment
   if (!fireball) return; // nothing there to catch
   const dx = x - fireball.x, dy = y - fireball.y;
   if (dx*dx + dy*dy > DUEL_CATCH_RADIUS*DUEL_CATCH_RADIUS) return; // wrong spot
   duelIncoming.caught = true;
-  fireball = null; dbTrail = []; // deflected -- gone immediately, doesn't finish crossing
+  duelIncoming.active = false; // resolved right now as a catch -- duelResolveIncoming's later
+                                // timeout will see active=false and no-op harmlessly when it fires
+  duelHeld = true; duelHeldPointerId = pointerId;
+  fireball.x = x; fireball.y = y; // snap to the finger immediately, no lag on the catch itself
+  duelFlash('Caught!');
+}
+// Release-to-throw-back: fires from the existing pointerUp() handler when the holding finger
+// lifts. Sends the ball back out toward whichever edge it originally came in from (just the
+// reverse of its direction at the moment it was caught), starting from wherever it's currently
+// being held -- not teleported back to an edge -- so the speed is recalculated against the
+// ACTUAL remaining distance from here, still landing close to the usual DB_DURATION_MS feel.
+function duelReleaseThrow(){
+  duelHeld = false; duelHeldPointerId = null;
+  if (!fireball) return;
+  const throwBackDir = fireball.vx > 0 ? 'left' : fireball.vx < 0 ? 'right'
+                      : fireball.vy > 0 ? 'up' : 'down';
+  const heldX = fireball.x, heldY = fireball.y;
+  const pad = 40;
+  let distToEdge;
+  if (throwBackDir==='left') distToEdge = heldX + pad;
+  else if (throwBackDir==='right') distToEdge = (W - heldX) + pad;
+  else if (throwBackDir==='up') distToEdge = heldY + pad;
+  else distToEdge = (H - heldY) + pad;
+  const speed = Math.max(1, distToEdge) * 16.7 / DB_DURATION_MS;
+  let vx=0, vy=0;
+  if (throwBackDir==='left') vx=-speed; else if (throwBackDir==='right') vx=speed;
+  else if (throwBackDir==='up') vy=-speed; else vy=speed;
+  fireball = { x:heldX, y:heldY, vx, vy, startT: performance.now(), rot: fireball.rot };
+  dbTrail = [];
+
+  const url = dbFirebaseUrl();
+  if (!url) return;
+  duelLastSeenThrowTs = duelServerNow();
+  const crossPos = (throwBackDir==='left' || throwBackDir==='right') ? heldY : heldX;
+  const cross = (throwBackDir==='left' || throwBackDir==='right') ? crossPos/H : crossPos/W;
+  fetch(url + '/rooms/' + duelRoom + '/throws/current.json', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dir: throwBackDir, cross, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} }),
+    cache: 'no-store'
+  }).catch(e=>{ dbgLog('duelReleaseThrow PUT threw ' + e.message); });
 }
 function duelResolveIncoming(){
-  if (!duelIncoming.active) return;
-  const caught = duelIncoming.caught;
+  if (!duelIncoming.active) return; // already caught (now held/thrown-back) or already resolved
   duelIncoming.active = false;
-  if (caught){ duelFlash('Blocked!'); return; }
   duelFlash('Hit!');
   duelMyHitsTaken++;
   const url = dbFirebaseUrl();
@@ -954,19 +1035,28 @@ function duelResolveIncoming(){
   }).catch(e=>{ dbgLog('duelResolveIncoming PUT threw ' + e.message); });
 }
 
+// Flanks the "rain running" status pill at the top instead of drawing dead-center on top of it
+// (where it used to get hidden behind that pill). Reads the pill's own on-screen box each frame
+// so this stays lined up with it at any screen size/orientation.
 function duelDrawHud(now){
   if (!duelActive) return;
   ctx.save();
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const r = statusEl.getBoundingClientRect();
+  const midY = r.top + r.height/2;
   ctx.font = `700 13px 'JetBrains Mono', monospace`;
-  ctx.fillStyle = 'rgba(200,255,210,0.85)';
+  ctx.fillStyle = 'rgba(200,255,210,0.9)';
+  ctx.textBaseline = 'middle';
   const my = duelRole === 'host' ? duelScoreB : duelScoreA;
   const their = duelRole === 'host' ? duelScoreA : duelScoreB;
-  ctx.fillText('You ' + my + ' · Them ' + their, W/2, 10);
+  ctx.textAlign = 'right';
+  ctx.fillText('You ' + my, r.left - 10, midY);
+  ctx.textAlign = 'left';
+  ctx.fillText('Them ' + their, r.right + 10, midY);
   if (duelFlashMsg && now < duelFlashUntil){
-    ctx.font = `700 20px 'JetBrains Mono', monospace`;
+    ctx.font = `700 18px 'JetBrains Mono', monospace`;
     ctx.fillStyle = '#ffd04a';
-    ctx.fillText(duelFlashMsg, W/2, 30);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(duelFlashMsg, W/2, r.bottom + 8);
   } else if (duelFlashMsg){
     duelFlashMsg = '';
   }
@@ -1084,7 +1174,7 @@ function crossOf(x,y){ return rainHoriz ? y : x; }
 function flowOf(x,y){ return rainHoriz ? x : y; }
 
 canvas.addEventListener('pointerdown', (e)=>{
-  if (duelActive) duelTryCatch(performance.now(), e.clientX, e.clientY); // additive -- never returns/consumes the event,
+  if (duelActive) duelTryCatch(performance.now(), e.clientX, e.clientY, e.pointerId); // additive -- never returns/consumes the event,
                                                     // so every existing gesture below still runs
                                                     // exactly as it always has, duel or not.
   canvas.setPointerCapture(e.pointerId);
@@ -1143,6 +1233,9 @@ canvas.addEventListener('pointerdown', (e)=>{
   }
 });
 canvas.addEventListener('pointermove', (e)=>{
+  if (duelHeld && e.pointerId === duelHeldPointerId && fireball){
+    fireball.x = e.clientX; fireball.y = e.clientY; // the ball just follows this finger around
+  }
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
 
   if (pointers.size === 2){
@@ -1154,6 +1247,7 @@ canvas.addEventListener('pointermove', (e)=>{
   if (touching) handleSwipe(fx, fy, performance.now());
 });
 function pointerUp(e){
+  if (duelHeld && e.pointerId === duelHeldPointerId) duelReleaseThrow(); // throws it back
   pointers.delete(e.pointerId);
   if (pointers.size === 1){
     // one finger remains -- resume ordinary single-finger touch fresh from here,
