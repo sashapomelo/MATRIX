@@ -718,6 +718,16 @@ function drawFireball(){
   const FLAME = ['#ff2a1a','#ff8a3c','#ffd04a'];
   ctx.save();
 
+  // Held in a duel: visually swell up, like it's being squeezed/held down under the finger
+  // and bulging out from underneath it, instead of staying the same size it was mid-flight.
+  // Scaling about the ball's own center so everything below (glow, ring, trail) just scales
+  // along with it -- no separate "held" drawing path needed.
+  if (duelHeld){
+    ctx.translate(fireball.x, fireball.y);
+    ctx.scale(1.7, 1.7);
+    ctx.translate(-fireball.x, -fireball.y);
+  }
+
   // soft red glow "sphere" backing -- the body of the swirl pool
   const grad = ctx.createRadialGradient(fireball.x, fireball.y, 0, fireball.x, fireball.y, DB_SWIRL_R*0.35);
   grad.addColorStop(0, 'rgba(255,50,20,0.9)');
@@ -784,7 +794,7 @@ let duelScoreA = 0, duelScoreB = 0; // hitsTaken by host / by guest, synced from
 let duelMyHitsTaken = 0;           // my own running count -- only I ever write my own slot
 const DUEL_WIN_SCORE = 5;
 const DUEL_CATCH_WINDOW_MS = 180;  // +/- this many ms around the ball's true predicted arrival
-const DUEL_CATCH_RADIUS = 50;      // px -- tap has to land within this of the ball's CURRENT spot
+const DUEL_CATCH_RADIUS = 72;      // px -- tap has to land within this of the ball's CURRENT spot
 // Tracks the one incoming ball I can currently try to block, if any. "deadline" is a
 // performance.now()-based timestamp for when the ball's flight (already lag-compensated,
 // see duelHandleIncomingThrow) finishes -- i.e. the moment I actually need to tap near.
