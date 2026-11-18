@@ -527,7 +527,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v25';
+const DUEL_BUILD = 'v26';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -822,6 +822,7 @@ const DUEL_CATCH_RADIUS = 72;      // px -- tap has to land within this of the b
 // see duelHandleIncomingThrow) finishes -- i.e. the moment I actually need to tap near.
 let duelIncoming = { active:false, caught:false };
 let duelHeld = false, duelHeldPointerId = null; // true while a caught ball is stuck to a finger
+let duelHeldStartX = 0, duelHeldStartY = 0; // where the catch happened -- duelReleaseThrow() measures the drag from here
 let duelFlashMsg = '', duelFlashUntil = 0;
 
 function duelFlash(text){ duelFlashMsg = text; duelFlashUntil = performance.now() + 1200; }
@@ -849,6 +850,9 @@ let duelBellyCountdownEndsAt = 0; // a duelServerNow()-comparable instant, same 
 let duelBellyIAmThrower = false; // which role I play for the CURRENT belly round
 let duelBellyActiveThrow = false; // set true for exactly the one duelReleaseThrow() call that should go out flagged belly:true
 let duelBellyCountdownSource = null, duelBellyResultSource = null;
+let duelBellyFlashUntil = 0;         // a brief bright burst the instant a belly catch lands
+const DUEL_BELLY_FLASH_MS = 500;
+const DUEL_BELLY_GLOW_COLOR = [255, 138, 60]; // same warm orange as the fireball's own mid-flame tone
 
 function duelBellyResetRally(){
   duelMyCatchCount = 0;
@@ -907,6 +911,7 @@ function duelBellyCheckCatch(openDist){
   duelIncoming.active = false;
   fireball = null; dbTrail = [];
   duelFlash('Swallowed!');
+  duelBellyFlashUntil = performance.now() + DUEL_BELLY_FLASH_MS; // see duelBellyDrawGlow()
   duelBellyResetRally();
   const url = dbFirebaseUrl();
   if (!url || !duelRoom) return;
@@ -915,6 +920,41 @@ function duelBellyCheckCatch(openDist){
     body: JSON.stringify({ caught:true, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} }),
     cache: 'no-store'
   }).catch(e=>{ dbgLog('duelBellyCheckCatch PUT threw ' + e.message); });
+}
+
+// Lights the opening up in warm orange, like firelight starting to show through the gap --
+// builds gradually as an incoming belly ball closes in on an already-open hole (so you can see
+// it coming before it's actually in catching range), then bursts brighter for an instant right
+// when the catch lands. Drawn over the insides reveal, same layer the rain's own parted-cable
+// glow would read against. Called from frame(), right after drawInsidesReveal().
+function duelBellyDrawGlow(now){
+  if (!stretchP1 || !stretchP2) return;
+  let approachAmt = 0;
+  if (duelIncoming.active && duelIncoming.belly && fireball && revealAmt > 0){
+    const midX = (stretchP1.x+stretchP2.x)/2, midY = (stretchP1.y+stretchP2.y)/2;
+    const dx = fireball.x-midX, dy = fireball.y-midY;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    const reach = DUEL_BELLY_CATCH_RADIUS * 4; // starts glowing well before it's actually catchable
+    approachAmt = Math.max(0, 1 - dist/reach) * revealAmt;
+  }
+  let flashAmt = 0;
+  if (now < duelBellyFlashUntil){
+    flashAmt = (duelBellyFlashUntil - now) / DUEL_BELLY_FLASH_MS;
+  }
+  const amt = Math.max(approachAmt*0.6, flashAmt);
+  if (amt <= 0.01) return;
+  const midX = (stretchP1.x+stretchP2.x)/2, midY = (stretchP1.y+stretchP2.y)/2;
+  const r = 40 + 110*amt;
+  const [cr,cg,cb] = DUEL_BELLY_GLOW_COLOR;
+  const grad = ctx.createRadialGradient(midX,midY,0, midX,midY,r);
+  grad.addColorStop(0,   `rgba(${cr},${cg},${cb},${0.55*amt})`);
+  grad.addColorStop(0.55,`rgba(${cr},${Math.round(cg*0.7)},${Math.round(cb*0.4)},${0.28*amt})`);
+  grad.addColorStop(1,   `rgba(${cr},${cg},${cb},0)`);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(midX, midY, r, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
 }
 
 // How far MY device's clock disagrees with Firebase's own server clock, in ms (serverTime -
@@ -1151,6 +1191,7 @@ function duelTryCatch(now, x, y, pointerId){
   duelIncoming.active = false; // resolved right now -- dbMaybeExpire's miss path checks "caught" too
   duelHeld = true; duelHeldPointerId = pointerId;
   fireball.x = x; fireball.y = y; // snap to the finger immediately, no lag on the catch itself
+  duelHeldStartX = x; duelHeldStartY = y; // where duelReleaseThrow() measures the throw-back drag from
   duelFlash('Caught!');
   // Every successful catch counts toward the belly-mode trigger -- once I've caught
   // DUEL_BELLY_TRIGGER times in this unbroken rally, I'm the one holding the ball right now,
@@ -1161,15 +1202,30 @@ function duelTryCatch(now, x, y, pointerId){
   }
 }
 // Release-to-throw-back: fires from the existing pointerUp() handler when the holding finger
-// lifts. Sends the ball back out toward whichever edge it originally came in from (just the
-// reverse of its direction at the moment it was caught), starting from wherever it's currently
-// being held -- not teleported back to an edge -- so the speed is recalculated against the
-// ACTUAL remaining distance from here, still landing close to the usual DB_DURATION_MS feel.
+// lifts. Starts from wherever the ball is currently being held -- not teleported back to an
+// edge -- so the speed is recalculated against the ACTUAL remaining distance from here, still
+// landing close to the usual DB_DURATION_MS feel.
+//
+// Direction: while held, the ball follows the finger 1:1 (see the pointermove hook), so
+// (current position - duelHeldStartX/Y, set the instant it was caught) IS the drag the player
+// made with it before letting go. If that drag is big enough to look deliberate, throw back
+// in THAT direction -- same dominant-axis convention handleSwipe() uses for a normal throw --
+// so a vertical catch can come back out horizontal, or any other axis switch. A tap-catch with
+// no real drag (or one too small to be sure it was deliberate) falls back to the old default:
+// straight back the way it came.
 function duelReleaseThrow(){
   duelHeld = false; duelHeldPointerId = null;
   if (!fireball) return;
-  const throwBackDir = fireball.vx > 0 ? 'left' : fireball.vx < 0 ? 'right'
-                      : fireball.vy > 0 ? 'up' : 'down';
+  const dragDx = fireball.x - duelHeldStartX, dragDy = fireball.y - duelHeldStartY;
+  const dragDist = Math.sqrt(dragDx*dragDx + dragDy*dragDy);
+  let throwBackDir;
+  if (dragDist > 34){
+    const dragHoriz = Math.abs(dragDx) > Math.abs(dragDy);
+    throwBackDir = dragHoriz ? (dragDx>0?'right':'left') : (dragDy>0?'down':'up');
+  } else {
+    throwBackDir = fireball.vx > 0 ? 'left' : fireball.vx < 0 ? 'right'
+                 : fireball.vy > 0 ? 'up' : 'down';
+  }
   const heldX = fireball.x, heldY = fireball.y;
   const pad = 40;
   let distToEdge;
@@ -2276,6 +2332,7 @@ function frame(){
   dbTick(dt); // advance the fireball (if any) BEFORE the rain loop below reads its position
 
   drawInsidesReveal(now, dt); // under the rain, so the parted cables read as a curtain over it
+  duelBellyDrawGlow(now); // no-op unless a belly ball is near/just caught -- see its own comment
 
   if (burstFrame>0){
     burstFrame++;
