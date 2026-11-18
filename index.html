@@ -527,7 +527,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v24';
+const DUEL_BUILD = 'v25';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -826,6 +826,97 @@ let duelFlashMsg = '', duelFlashUntil = 0;
 
 function duelFlash(text){ duelFlashMsg = text; duelFlashUntil = performance.now() + 1200; }
 
+/* ----------------------------------------------------------------------
+   BELLY MODE (testing) -- once each player has caught DUEL_BELLY_TRIGGER
+   times in a row without a miss, the NEXT throw becomes a special round:
+   a synced 3s countdown plays on both screens, then the holder's ball
+   auto-releases as a flagged "belly" throw, and the receiver can ONLY
+   catch it by having their two-finger stretch/pinch gesture (the same
+   one that reveals what's "inside" the rain everywhere else in this
+   file) already open when the ball reaches it -- tapping does nothing
+   for this one. A normal miss (never opened in time) scores exactly
+   like any other miss, straight through the existing dbMaybeExpire ->
+   duelResolveIncoming path, no new code needed for that case. The one
+   new case is a SUCCESSFUL belly catch -- see duelBellyResultSource's
+   comment below for why that has to flip who takes the "hit".
+   ---------------------------------------------------------------------- */
+const DUEL_BELLY_TRIGGER = 2;        // catches needed, per player, before the next throw goes Belly -- test value, tune freely
+const DUEL_BELLY_COUNTDOWN_MS = 3000;
+const DUEL_BELLY_CATCH_RADIUS = 90;  // px, from the stretch gesture's midpoint -- a bit more forgiving than a tap since there's no visual target to aim at
+let duelMyCatchCount = 0;        // my own successful catches in the current unbroken rally
+let duelBellyPending = false;    // the synced countdown is running, before the belly throw itself goes out
+let duelBellyCountdownEndsAt = 0; // a duelServerNow()-comparable instant, same clock as everything else here
+let duelBellyIAmThrower = false; // which role I play for the CURRENT belly round
+let duelBellyActiveThrow = false; // set true for exactly the one duelReleaseThrow() call that should go out flagged belly:true
+let duelBellyCountdownSource = null, duelBellyResultSource = null;
+
+function duelBellyResetRally(){
+  duelMyCatchCount = 0;
+  duelBellyPending = false;
+  duelBellyIAmThrower = false;
+  duelBellyActiveThrow = false;
+}
+
+// Called the instant MY OWN catch count crosses the trigger -- I'm necessarily the one holding
+// the ball right now (about to throw it back), so I become this round's thrower.
+function duelBellyTrigger(){
+  duelBellyPending = true;
+  duelBellyIAmThrower = true;
+  duelBellyCountdownEndsAt = duelServerNow() + DUEL_BELLY_COUNTDOWN_MS;
+  const url = dbFirebaseUrl();
+  if (!url || !duelRoom) return;
+  fetch(url + '/rooms/' + duelRoom + '/bellyCountdown.json', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ start: {'.sv':'timestamp'}, from: DB_CLIENT_ID }),
+    cache: 'no-store'
+  }).catch(e=>{ dbgLog('duelBellyTrigger PUT threw ' + e.message); });
+}
+
+// Runs every frame while a belly round is pending -- shows the synced countdown on BOTH screens
+// (as whichever role-appropriate instruction) and, the instant it hits zero, fires the actual
+// throw on the thrower's device only. Called from frame(), right after dbMaybeExpire().
+function duelBellyTick(now){
+  if (!duelBellyPending) return;
+  const remain = duelBellyCountdownEndsAt - duelServerNow();
+  if (remain > 0){
+    const secs = Math.max(1, Math.ceil(remain/1000));
+    duelFlash(duelBellyIAmThrower ? ('BELLY MODE -- get ready ' + secs) : ('BELLY MODE -- open the matrix! ' + secs));
+    return;
+  }
+  duelBellyPending = false;
+  if (duelBellyIAmThrower && duelHeld){
+    duelBellyActiveThrow = true;
+    duelReleaseThrow();
+    duelBellyActiveThrow = false;
+  }
+}
+
+// Belly-mode catching: no tap involved. The ball counts as caught the instant it's within reach
+// of the gesture's open hole AND that hole is actually open enough to see through -- same
+// INSIDES_SHOW_THRESHOLD the rain-reveal effect itself uses -- checked continuously every frame
+// instead of on a single tap event like the normal catch. Called from frame(), right where
+// openDist for THIS frame is already computed.
+function duelBellyCheckCatch(openDist){
+  if (!duelIncoming.active || !duelIncoming.belly || duelIncoming.caught) return;
+  if (!fireball || !stretchP1 || !stretchP2) return;
+  if (openDist <= INSIDES_SHOW_THRESHOLD) return; // hole isn't open enough yet
+  const midX = (stretchP1.x + stretchP2.x) / 2, midY = (stretchP1.y + stretchP2.y) / 2;
+  const dx = fireball.x - midX, dy = fireball.y - midY;
+  if (Math.sqrt(dx*dx + dy*dy) > DUEL_BELLY_CATCH_RADIUS) return;
+  duelIncoming.caught = true;
+  duelIncoming.active = false;
+  fireball = null; dbTrail = [];
+  duelFlash('Swallowed!');
+  duelBellyResetRally();
+  const url = dbFirebaseUrl();
+  if (!url || !duelRoom) return;
+  fetch(url + '/rooms/' + duelRoom + '/bellyResult.json', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ caught:true, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} }),
+    cache: 'no-store'
+  }).catch(e=>{ dbgLog('duelBellyCheckCatch PUT threw ' + e.message); });
+}
+
 // How far MY device's clock disagrees with Firebase's own server clock, in ms (serverTime -
 // Date.now()). This is the actual fix for two symptoms that looked unrelated but had the same
 // cause: throws reaching one side but not the other, and the fireball flying "insanely fast" on
@@ -892,19 +983,57 @@ function duelConnect(){
 
     duelScoreASource = new EventSource(url + '/rooms/' + duelRoom + '/scoreA.json');
     duelScoreASource.addEventListener('put', (ev)=>{
-      try { const msg = JSON.parse(ev.data); duelScoreA = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); }
+      // Any score change means a miss or a belly resolution just happened somewhere -- either
+      // way the rally is over, so this is also the one shared, already-synced spot to reset the
+      // belly-mode rally counters on BOTH devices (whichever one didn't just set them directly).
+      try { const msg = JSON.parse(ev.data); duelScoreA = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); duelBellyResetRally(); }
       catch(e){}
     });
     duelScoreBSource = new EventSource(url + '/rooms/' + duelRoom + '/scoreB.json');
     duelScoreBSource.addEventListener('put', (ev)=>{
-      try { const msg = JSON.parse(ev.data); duelScoreB = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); }
+      try { const msg = JSON.parse(ev.data); duelScoreB = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); duelBellyResetRally(); }
       catch(e){}
+    });
+
+    // Synced belly-mode countdown -- only the THROWER ever writes this, so any device that
+    // receives it (and it isn't its own echo) is necessarily this round's catcher.
+    duelBellyCountdownSource = new EventSource(url + '/rooms/' + duelRoom + '/bellyCountdown.json');
+    duelBellyCountdownSource.addEventListener('put', (ev)=>{
+      try {
+        const msg = JSON.parse(ev.data); const b = msg && msg.data;
+        if (!b || typeof b !== 'object' || b.from === DB_CLIENT_ID) return;
+        duelBellyPending = true;
+        duelBellyIAmThrower = false;
+        duelBellyCountdownEndsAt = b.start + DUEL_BELLY_COUNTDOWN_MS;
+      } catch(e){ dbgLog('duelBellyCountdownSource put threw ' + e.message); }
+    });
+
+    // Belly-round outcome -- only sent by the catcher, and only on a SUCCESSFUL catch (a miss
+    // needs no message, it already scores through the normal dbMaybeExpire path). Receiving
+    // "caught" here means I was the thrower this round and my throw got through the hole, so
+    // my own hits-taken count is the one that goes up -- see duelBellyCheckCatch's comment for
+    // the full reasoning on why success flips which side scores.
+    duelBellyResultSource = new EventSource(url + '/rooms/' + duelRoom + '/bellyResult.json');
+    duelBellyResultSource.addEventListener('put', (ev)=>{
+      try {
+        const msg = JSON.parse(ev.data); const r = msg && msg.data;
+        if (!r || typeof r !== 'object' || r.from === DB_CLIENT_ID) return;
+        if (!r.caught) return;
+        duelMyHitsTaken++;
+        duelFlash('Belly catch!');
+        const field = duelRole === 'host' ? 'scoreA' : 'scoreB';
+        fetch(url + '/rooms/' + duelRoom + '/' + field + '.json', {
+          method: 'PUT', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(duelMyHitsTaken), cache: 'no-store'
+        }).catch(e=>{ dbgLog('duelBellyResult score PUT threw ' + e.message); });
+      } catch(e){ dbgLog('duelBellyResultSource put threw ' + e.message); }
     });
   });
 }
 function duelDisconnect(){
-  [duelThrowSource, duelScoreASource, duelScoreBSource].forEach(es=>{ if (es) try{ es.close(); }catch(e){} });
-  duelThrowSource = duelScoreASource = duelScoreBSource = null;
+  [duelThrowSource, duelScoreASource, duelScoreBSource, duelBellyCountdownSource, duelBellyResultSource].forEach(es=>{ if (es) try{ es.close(); }catch(e){} });
+  duelThrowSource = duelScoreASource = duelScoreBSource = duelBellyCountdownSource = duelBellyResultSource = null;
+  duelBellyResetRally();
   duelActive = false;
   duelIncoming.active = false;
 }
@@ -995,8 +1124,8 @@ function duelHandleIncomingThrow(t){
   const elapsed = duelServerNow() - t.ts;
   const remaining = Math.max(120, DB_DURATION_MS - elapsed);
   dbStartFireball(recvDir, realCross, remaining);
-  duelIncoming = { active:true, caught:false };
-  dbgLog('duelIncoming: elapsed=' + Math.round(elapsed) + 'ms remaining=' + Math.round(remaining) + 'ms');
+  duelIncoming = { active:true, caught:false, belly: t.belly === true };
+  dbgLog('duelIncoming: elapsed=' + Math.round(elapsed) + 'ms remaining=' + Math.round(remaining) + 'ms' + (t.belly ? ' [BELLY]' : ''));
 }
 // Catching is now PURELY spatial -- tap within DUEL_CATCH_RADIUS of the ball's CURRENT position,
 // any time during its flight, and it's caught. (An earlier version also required tapping within
@@ -1009,6 +1138,7 @@ function duelHandleIncomingThrow(t){
 // right back out the way it came. The duel keeps going until someone actually misses.
 function duelTryCatch(now, x, y, pointerId){
   if (!duelIncoming.active || duelIncoming.caught) return;
+  if (duelIncoming.belly) return; // belly-mode balls only catch through the open hole -- see duelBellyCheckCatch
   if (!fireball) return; // nothing there to catch
   const dx = x - fireball.x, dy = y - fireball.y;
   const dist = Math.sqrt(dx*dx+dy*dy);
@@ -1022,6 +1152,13 @@ function duelTryCatch(now, x, y, pointerId){
   duelHeld = true; duelHeldPointerId = pointerId;
   fireball.x = x; fireball.y = y; // snap to the finger immediately, no lag on the catch itself
   duelFlash('Caught!');
+  // Every successful catch counts toward the belly-mode trigger -- once I've caught
+  // DUEL_BELLY_TRIGGER times in this unbroken rally, I'm the one holding the ball right now,
+  // so I become the thrower for the special round that's about to start.
+  duelMyCatchCount++;
+  if (!duelBellyPending && duelMyCatchCount >= DUEL_BELLY_TRIGGER){
+    duelBellyTrigger();
+  }
 }
 // Release-to-throw-back: fires from the existing pointerUp() handler when the holding finger
 // lifts. Sends the ball back out toward whichever edge it originally came in from (just the
@@ -1052,10 +1189,15 @@ function duelReleaseThrow(){
   duelLastSeenThrowTs = duelServerNow();
   const crossPos = (throwBackDir==='left' || throwBackDir==='right') ? heldY : heldX;
   const cross = (throwBackDir==='left' || throwBackDir==='right') ? crossPos/H : crossPos/W;
+  // duelBellyActiveThrow is set true for exactly the one auto-fired call at the end of a belly
+  // countdown (see duelBellyTick) -- flag that throw so the receiver's duelHandleIncomingThrow
+  // knows to switch this ball over to hole-only catching instead of the normal tap.
+  const body = { dir: throwBackDir, cross, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} };
+  if (duelBellyActiveThrow) body.belly = true;
   fetch(url + '/rooms/' + duelRoom + '/throws/current.json', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ dir: throwBackDir, cross, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} }),
+    body: JSON.stringify(body),
     cache: 'no-store'
   }).catch(e=>{ dbgLog('duelReleaseThrow PUT threw ' + e.message); });
 }
@@ -1289,7 +1431,18 @@ canvas.addEventListener('pointermove', (e)=>{
   if (touching) handleSwipe(fx, fy, performance.now());
 });
 function pointerUp(e){
-  if (duelHeld && e.pointerId === duelHeldPointerId) duelReleaseThrow(); // throws it back
+  if (duelHeld && e.pointerId === duelHeldPointerId){
+    if (duelBellyPending && duelBellyIAmThrower){
+      // Belly mode: the throw is timed to the synced countdown, not to when the finger lifts.
+      // Keep the ball "held" (frozen in place by dbTick's duelHeld check) even though this
+      // finger is gone, so it can't fly out early and rob the other player of their chance to
+      // open their hole in time -- duelBellyTick() auto-releases it the instant the countdown
+      // actually ends.
+      duelHeldPointerId = null;
+    } else {
+      duelReleaseThrow(); // throws it back
+    }
+  }
   pointers.delete(e.pointerId);
   if (pointers.size === 1){
     // one finger remains -- resume ordinary single-finger touch fresh from here,
@@ -2118,6 +2271,8 @@ function frame(){
   revealAmt += (revealTarget - revealAmt) * Math.min(1, dt / REVEAL_FADE_MS);
   if (revealAmt < 0.01) revealAmt = 0;
 
+  duelBellyCheckCatch(openDist); // no-op unless a belly-mode ball is currently incoming
+
   dbTick(dt); // advance the fireball (if any) BEFORE the rain loop below reads its position
 
   drawInsidesReveal(now, dt); // under the rain, so the parted cables read as a curtain over it
@@ -2230,6 +2385,7 @@ function frame(){
   drawMessageOverlay(now);
   drawFireball();
   dbMaybeExpire(now);
+  duelBellyTick(now); // no-op unless a belly round is pending -- counts down, then auto-throws
   duelDrawHud(now); // no-op unless a duel is active -- draws over everything else, like the status bar
   requestAnimationFrame(frame);
 }
