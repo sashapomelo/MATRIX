@@ -94,9 +94,9 @@
     pointer-events:auto;
     display:flex;
     align-items:center;
-    gap:8px;
+    gap:5px;
     width:min(640px, 100%);
-    padding:8px;
+    padding:6px;
     border:1px solid var(--panel-border);
     border-radius:16px;
     background:var(--panel-bg);
@@ -118,14 +118,14 @@
   #msgInput::placeholder{color:var(--ink-dim);}
   .dockBtn{
     flex:none;
-    width:38px;height:38px;
+    width:34px;height:34px;
     display:flex;align-items:center;justify-content:center;
-    border-radius:10px;
+    border-radius:9px;
     border:1px solid var(--panel-border);
     background:rgba(57,255,106,0.06);
     color:var(--phosphor);
     cursor:pointer;
-    font-size:16px;
+    font-size:14px;
     transition:background .15s,transform .1s,color .15s;
     user-select:none;
   }
@@ -254,7 +254,7 @@
 <!-- TEMPORARY debug log -- shows every mic/speech event with a timestamp, kept on
      screen (not overwritten like the status bar) so it can just be screenshotted.
      Safe to remove once iOS speech/mic is sorted out. -->
-<div id="dbgPanel" hidden></div>
+<div id="dbgPanel"></div>
 
 <div id="settingsPanel" hidden>
   <h3>Matrix Voice</h3>
@@ -314,7 +314,6 @@
     <input id="msgInput" type="text" placeholder="Speak or type..." autocomplete="off" spellcheck="false">
     <button class="dockBtn" id="micBtn" title="speak">🎤</button>
     <button class="dockBtn" id="sendBtn" title="send">➤</button>
-    <button class="dockBtn" id="replayBtn" title="hear last reply (tap if it didn't speak automatically)">🔊</button>
     <button class="dockBtn" id="settingsBtn" title="settings">⚙</button>
   </div>
 </div>
@@ -914,6 +913,8 @@ function duelLeave(){
   duelRoom = ''; duelRole = '';
   history.replaceState(null, '', location.pathname);
   duelShowView('lobby');
+  const btn = document.getElementById('duelBtn');
+  if (btn) btn.classList.remove('active');
 }
 function duelRenderRoom(){
   document.getElementById('duelRoomCode').textContent = duelRoom;
@@ -925,6 +926,8 @@ function duelRenderRoom(){
   // for the whole match. The small text drawn by duelDrawHud() at the top of the canvas is
   // the only score display that stays up while you're actually playing.
   document.getElementById('duelPanel').hidden = true;
+  const btn = document.getElementById('duelBtn');
+  if (btn) btn.classList.add('active'); // same highlighted look as 🐉 when armed
 }
 
 function duelUpdateHud(){
@@ -977,6 +980,7 @@ function duelHandleIncomingThrow(t){
   dbStartFireball(recvDir, realCross, remaining);
   const deadline = performance.now() + remaining;
   duelIncoming = { active:true, deadline, caught:false };
+  dbgLog('duelIncoming: elapsed=' + Math.round(elapsed) + 'ms remaining=' + Math.round(remaining) + 'ms deadline(perf)=' + Math.round(deadline));
   setTimeout(duelResolveIncoming, remaining + DUEL_CATCH_WINDOW_MS + 40);
 }
 // A catch now needs BOTH the right moment AND the right spot -- tapping anywhere on screen in
@@ -987,11 +991,20 @@ function duelHandleIncomingThrow(t){
 // around (see the pointermove hook below) until the finger lifts, at which point duelReleaseThrow()
 // sends it right back out the way it came. The duel keeps going until someone actually misses.
 function duelTryCatch(now, x, y, pointerId){
-  if (!duelIncoming.active || duelIncoming.caught) return;
-  if (Math.abs(now - duelIncoming.deadline) > DUEL_CATCH_WINDOW_MS) return; // wrong moment
-  if (!fireball) return; // nothing there to catch
+  if (!duelIncoming.active){ dbgLog('duelTryCatch: no incoming ball right now'); return; }
+  if (duelIncoming.caught) return;
+  if (Math.abs(now - duelIncoming.deadline) > DUEL_CATCH_WINDOW_MS){
+    dbgLog('duelTryCatch: MISSED TIMING by ' + Math.round(now - duelIncoming.deadline) + 'ms (window is +/-' + DUEL_CATCH_WINDOW_MS + 'ms)');
+    return; // wrong moment
+  }
+  if (!fireball){ dbgLog('duelTryCatch: no fireball object to catch'); return; }
   const dx = x - fireball.x, dy = y - fireball.y;
-  if (dx*dx + dy*dy > DUEL_CATCH_RADIUS*DUEL_CATCH_RADIUS) return; // wrong spot
+  const dist = Math.sqrt(dx*dx+dy*dy);
+  if (dist > DUEL_CATCH_RADIUS){
+    dbgLog('duelTryCatch: MISSED SPOT by ' + Math.round(dist) + 'px (radius is ' + DUEL_CATCH_RADIUS + 'px) -- tapped (' + Math.round(x) + ',' + Math.round(y) + ') ball at (' + Math.round(fireball.x) + ',' + Math.round(fireball.y) + ')');
+    return; // wrong spot
+  }
+  dbgLog('duelTryCatch: CAUGHT -- off by ' + Math.round(now - duelIncoming.deadline) + 'ms, ' + Math.round(dist) + 'px');
   duelIncoming.caught = true;
   duelIncoming.active = false; // resolved right now as a catch -- duelResolveIncoming's later
                                 // timeout will see active=false and no-op harmlessly when it fires
@@ -2267,32 +2280,6 @@ function saveSettings(){
   if (dragonBallMode){ dbDisconnectRelay(); dbConnectRelay(); }
 }
 loadSettings();
-
-/* Manual replay -- every automatic speak() attempt after an async fetch (or a
-   mic session) has turned out to silently no-op on this iPhone: speak() is
-   called, speechSynthesis.speaking/pending both read false immediately after,
-   and no onstart/onerror event EVER follows, with or without voices loaded.
-   That's iOS Safari flatly refusing it for being one step too far from a real
-   tap, with no error to show for it. A tap on THIS button is a genuine, direct
-   gesture -- no setTimeout, no prior async work in between -- which iOS does
-   reliably allow, so this is the guaranteed fallback when the automatic one
-   goes silent. */
-document.getElementById('replayBtn').addEventListener('pointerdown', (e)=>{
-  e.stopPropagation();
-  dbgLog('replay button tapped, lastReplyText len ' + lastReplyText.length);
-  if (!lastReplyText){ setStatus('err', 'no reply to replay yet'); return; }
-  try {
-    if (!('speechSynthesis' in window)){ setStatus('err', 'speech not supported here'); return; }
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(lastReplyText);
-    u.rate = 0.98; u.pitch = 0.75;
-    u.onstart = ()=>{ dbgLog('replay: onstart fired'); setStatus('live', 'speech: started'); };
-    u.onend = ()=>{ dbgLog('replay: onend fired'); setStatus('live', 'speech: ended ok'); };
-    u.onerror = (ev)=>{ dbgLog('replay: onerror ' + (ev.error||'unknown')); setStatus('err', 'speech error: ' + (ev.error||'unknown')); };
-    window.speechSynthesis.speak(u);
-    dbgLog('replay: speak() returned, speaking=' + window.speechSynthesis.speaking);
-  } catch(err){ dbgLog('replay threw: ' + err.message); setStatus('err', 'speech threw: ' + err.message); }
-});
 
 settingsBtn.addEventListener('pointerdown', (e)=>{ e.stopPropagation(); settingsPanel.hidden = !settingsPanel.hidden; });
 document.getElementById('settingsClose').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); settingsPanel.hidden = true; });
