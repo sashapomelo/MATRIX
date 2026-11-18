@@ -254,7 +254,7 @@
 <!-- TEMPORARY debug log -- shows every mic/speech event with a timestamp, kept on
      screen (not overwritten like the status bar) so it can just be screenshotted.
      Safe to remove once iOS speech/mic is sorted out. -->
-<div id="dbgPanel"></div>
+<div id="dbgPanel" hidden></div>
 
 <div id="settingsPanel" hidden>
   <h3>Matrix Voice</h3>
@@ -775,6 +775,13 @@ function dbMaybeExpire(now){
   if (duelHeld) return; // a held ball never expires, however long it's carried
   if (now - fireball.startT > DB_LIFETIME_MS ||
       fireball.x < -60 || fireball.x > W+60 || fireball.y < -60 || fireball.y > H+60){
+    // An unresolved incoming duel ball that reaches here means it got all the way across
+    // without being caught -- that's the actual moment a miss happens, so resolve it right
+    // here rather than on a separately-scheduled timer guessing when this would occur.
+    if (duelIncoming.active && !duelIncoming.caught){
+      duelIncoming.active = false;
+      duelResolveIncoming();
+    }
     fireball = null; dbTrail = [];
   }
 }
@@ -798,12 +805,11 @@ let duelLastSeenThrowTs = 0; // own-echo suppression, room-scoped (separate from
 let duelScoreA = 0, duelScoreB = 0; // hitsTaken by host / by guest, synced from Firebase
 let duelMyHitsTaken = 0;           // my own running count -- only I ever write my own slot
 const DUEL_WIN_SCORE = 5;
-const DUEL_CATCH_WINDOW_MS = 180;  // +/- this many ms around the ball's true predicted arrival
 const DUEL_CATCH_RADIUS = 72;      // px -- tap has to land within this of the ball's CURRENT spot
 // Tracks the one incoming ball I can currently try to block, if any. "deadline" is a
 // performance.now()-based timestamp for when the ball's flight (already lag-compensated,
 // see duelHandleIncomingThrow) finishes -- i.e. the moment I actually need to tap near.
-let duelIncoming = { active:false, deadline:0, caught:false };
+let duelIncoming = { active:false, caught:false };
 let duelHeld = false, duelHeldPointerId = null; // true while a caught ball is stuck to a finger
 let duelFlashMsg = '', duelFlashUntil = 0;
 
@@ -978,36 +984,30 @@ function duelHandleIncomingThrow(t){
   const elapsed = duelServerNow() - t.ts;
   const remaining = Math.max(120, DB_DURATION_MS - elapsed);
   dbStartFireball(recvDir, realCross, remaining);
-  const deadline = performance.now() + remaining;
-  duelIncoming = { active:true, deadline, caught:false };
-  dbgLog('duelIncoming: elapsed=' + Math.round(elapsed) + 'ms remaining=' + Math.round(remaining) + 'ms deadline(perf)=' + Math.round(deadline));
-  setTimeout(duelResolveIncoming, remaining + DUEL_CATCH_WINDOW_MS + 40);
+  duelIncoming = { active:true, caught:false };
+  dbgLog('duelIncoming: elapsed=' + Math.round(elapsed) + 'ms remaining=' + Math.round(remaining) + 'ms');
 }
-// A catch now needs BOTH the right moment AND the right spot -- tapping anywhere on screen in
-// time no longer counts. x,y are the tap's actual screen coordinates, compared against the
-// fireball's real current position (it's still moving, so this has to track where it actually
-// is right now, not where it started or where it'll end up). A successful catch no longer just
-// deletes the ball -- it switches to HELD: the ball sticks to that finger/pointer, following it
-// around (see the pointermove hook below) until the finger lifts, at which point duelReleaseThrow()
-// sends it right back out the way it came. The duel keeps going until someone actually misses.
+// Catching is now PURELY spatial -- tap within DUEL_CATCH_RADIUS of the ball's CURRENT position,
+// any time during its flight, and it's caught. (An earlier version also required tapping within
+// a narrow time window around a precomputed "arrival" instant -- debug logs showed that was the
+// entire problem: it was nearly always rejecting on timing, well before anyone's aim was even
+// checked, because a fixed instant deep into the flight doesn't match when a person naturally
+// reaches for a moving target. Spatial-only removes that whole failure mode.) A successful catch
+// switches the ball to HELD: it sticks to that finger/pointer, following it around (see the
+// pointermove hook below) until the finger lifts, at which point duelReleaseThrow() sends it
+// right back out the way it came. The duel keeps going until someone actually misses.
 function duelTryCatch(now, x, y, pointerId){
-  if (!duelIncoming.active){ dbgLog('duelTryCatch: no incoming ball right now'); return; }
-  if (duelIncoming.caught) return;
-  if (Math.abs(now - duelIncoming.deadline) > DUEL_CATCH_WINDOW_MS){
-    dbgLog('duelTryCatch: MISSED TIMING by ' + Math.round(now - duelIncoming.deadline) + 'ms (window is +/-' + DUEL_CATCH_WINDOW_MS + 'ms)');
-    return; // wrong moment
-  }
-  if (!fireball){ dbgLog('duelTryCatch: no fireball object to catch'); return; }
+  if (!duelIncoming.active || duelIncoming.caught) return;
+  if (!fireball) return; // nothing there to catch
   const dx = x - fireball.x, dy = y - fireball.y;
   const dist = Math.sqrt(dx*dx+dy*dy);
   if (dist > DUEL_CATCH_RADIUS){
-    dbgLog('duelTryCatch: MISSED SPOT by ' + Math.round(dist) + 'px (radius is ' + DUEL_CATCH_RADIUS + 'px) -- tapped (' + Math.round(x) + ',' + Math.round(y) + ') ball at (' + Math.round(fireball.x) + ',' + Math.round(fireball.y) + ')');
+    dbgLog('duelTryCatch: MISSED SPOT by ' + Math.round(dist) + 'px (radius is ' + DUEL_CATCH_RADIUS + 'px)');
     return; // wrong spot
   }
-  dbgLog('duelTryCatch: CAUGHT -- off by ' + Math.round(now - duelIncoming.deadline) + 'ms, ' + Math.round(dist) + 'px');
+  dbgLog('duelTryCatch: CAUGHT -- ' + Math.round(dist) + 'px off');
   duelIncoming.caught = true;
-  duelIncoming.active = false; // resolved right now as a catch -- duelResolveIncoming's later
-                                // timeout will see active=false and no-op harmlessly when it fires
+  duelIncoming.active = false; // resolved right now -- dbMaybeExpire's miss path checks "caught" too
   duelHeld = true; duelHeldPointerId = pointerId;
   fireball.x = x; fireball.y = y; // snap to the finger immediately, no lag on the catch itself
   duelFlash('Caught!');
@@ -1048,9 +1048,11 @@ function duelReleaseThrow(){
     cache: 'no-store'
   }).catch(e=>{ dbgLog('duelReleaseThrow PUT threw ' + e.message); });
 }
+// Called exactly once, from dbMaybeExpire(), the instant an unresolved incoming ball expires --
+// the caller already flipped duelIncoming.active to false right before calling this, so there's
+// no "is this still live" check needed here anymore (there used to be, back when this was also
+// reachable from a separately-scheduled timer racing against a catch).
 function duelResolveIncoming(){
-  if (!duelIncoming.active) return; // already caught (now held/thrown-back) or already resolved
-  duelIncoming.active = false;
   duelFlash('Hit!');
   duelMyHitsTaken++;
   const url = dbFirebaseUrl();
