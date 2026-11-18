@@ -519,6 +519,17 @@ function dbFirebaseUrl(){
   const saved = (localStorage.getItem('dragonBall.firebaseUrl') || '').trim();
   return (saved || DEFAULT_FIREBASE_URL).replace(/\/$/,'');
 }
+// Build marker -- bump this on every delivered version. Shows up in the browser tab title and the
+// console, with zero on-screen footprint, specifically so "which build is this device ACTUALLY
+// running" is a 2-second glance instead of a guessing game. This exists because of a real incident:
+// an iPhone kept reporting bugs (catch never registers, always shows "You lose") that turned out to
+// be impossible given the current code, and a debug-log screenshot confirmed why -- it was still
+// showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
+// versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
+// new one. Check this tag first whenever behavior doesn't match the current code.
+const DUEL_BUILD = 'v24';
+console.log('[matrix-duel] build ' + DUEL_BUILD);
+document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
 // (Firebase pushes every write back out to every listener, including the one that wrote it).
 const DB_CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
