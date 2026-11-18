@@ -778,6 +778,7 @@ let duelScoreA = 0, duelScoreB = 0; // hitsTaken by host / by guest, synced from
 let duelMyHitsTaken = 0;           // my own running count -- only I ever write my own slot
 const DUEL_WIN_SCORE = 5;
 const DUEL_CATCH_WINDOW_MS = 180;  // +/- this many ms around the ball's true predicted arrival
+const DUEL_CATCH_RADIUS = 50;      // px -- tap has to land within this of the ball's CURRENT spot
 // Tracks the one incoming ball I can currently try to block, if any. "deadline" is a
 // performance.now()-based timestamp for when the ball's flight (already lag-compensated,
 // see duelHandleIncomingThrow) finishes -- i.e. the moment I actually need to tap near.
@@ -864,6 +865,11 @@ function duelRenderRoom(){
   document.getElementById('duelLinkOut').value = duelRoomUrlFor(duelRoom);
   duelUpdateHud();
   duelShowView('room');
+  // Close the panel itself once you're actually in a room -- the link/code/Leave button are
+  // one 🥊 tap away if you need them again, but they shouldn't sit open over half the screen
+  // for the whole match. The small text drawn by duelDrawHud() at the top of the canvas is
+  // the only score display that stays up while you're actually playing.
+  document.getElementById('duelPanel').hidden = true;
 }
 
 function duelUpdateHud(){
@@ -899,6 +905,12 @@ function duelHandleIncomingThrow(t){
   if (duelIncoming.active) return;
   const frac = typeof t.cross === 'number' ? t.cross : 0.5;
   const realCross = (t.dir==='left' || t.dir==='right') ? frac*H : frac*W;
+  // Duel mode mirrors the direction, unlike solo Dragon Ball mode -- two people are standing
+  // FACING each other, so a swipe thrown to the right leaves the thrower's screen moving right
+  // but arrives on the other person's screen from THEIR right, moving left (same as reaching
+  // out your right hand to someone facing you -- it lines up with their left). Vertical flips
+  // too the same way (an upward throw arrives entering from the top, heading down toward them).
+  const recvDir = dbOppositeDir(t.dir);
   // Lag compensation: don't always play a full DB_DURATION_MS from "now" (that would make the
   // ball arrive later and later the more latency there is) -- play only whatever's actually LEFT
   // of its nominal flight, so the ball's position stays anchored to when it was really thrown.
@@ -906,17 +918,23 @@ function duelHandleIncomingThrow(t){
   // an instant, unreactable jump-cut.
   const elapsed = Date.now() - t.ts;
   const remaining = Math.max(120, DB_DURATION_MS - elapsed);
-  dbStartFireball(t.dir, realCross, remaining);
+  dbStartFireball(recvDir, realCross, remaining);
   const deadline = performance.now() + remaining;
   duelIncoming = { active:true, deadline, caught:false };
   setTimeout(duelResolveIncoming, remaining + DUEL_CATCH_WINDOW_MS + 40);
 }
-function duelTryCatch(now){
+// A catch now needs BOTH the right moment AND the right spot -- tapping anywhere on screen in
+// time no longer counts. x,y are the tap's actual screen coordinates, compared against the
+// fireball's real current position (it's still moving, so this has to track where it actually
+// is right now, not where it started or where it'll end up).
+function duelTryCatch(now, x, y){
   if (!duelIncoming.active || duelIncoming.caught) return;
-  if (Math.abs(now - duelIncoming.deadline) <= DUEL_CATCH_WINDOW_MS){
-    duelIncoming.caught = true;
-    fireball = null; dbTrail = []; // deflected -- gone immediately, doesn't finish crossing
-  }
+  if (Math.abs(now - duelIncoming.deadline) > DUEL_CATCH_WINDOW_MS) return; // wrong moment
+  if (!fireball) return; // nothing there to catch
+  const dx = x - fireball.x, dy = y - fireball.y;
+  if (dx*dx + dy*dy > DUEL_CATCH_RADIUS*DUEL_CATCH_RADIUS) return; // wrong spot
+  duelIncoming.caught = true;
+  fireball = null; dbTrail = []; // deflected -- gone immediately, doesn't finish crossing
 }
 function duelResolveIncoming(){
   if (!duelIncoming.active) return;
@@ -1066,7 +1084,7 @@ function crossOf(x,y){ return rainHoriz ? y : x; }
 function flowOf(x,y){ return rainHoriz ? x : y; }
 
 canvas.addEventListener('pointerdown', (e)=>{
-  if (duelActive) duelTryCatch(performance.now()); // additive -- never returns/consumes the event,
+  if (duelActive) duelTryCatch(performance.now(), e.clientX, e.clientY); // additive -- never returns/consumes the event,
                                                     // so every existing gesture below still runs
                                                     // exactly as it always has, duel or not.
   canvas.setPointerCapture(e.pointerId);
