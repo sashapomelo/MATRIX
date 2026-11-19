@@ -527,7 +527,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v27';
+const DUEL_BUILD = 'v29';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -1161,8 +1161,17 @@ function duelHandleIncomingThrow(t){
   // of its nominal flight, so the ball's position stays anchored to when it was really thrown.
   // Clamped to a floor so a very late/jittery packet still gives something tappable rather than
   // an instant, unreactable jump-cut.
+  // The CYD board's own HTTPS PUT can genuinely take a second or more to complete on that
+  // hardware (confirmed in its own firmware's comments) -- by the time its throw actually
+  // reaches Firebase, a big chunk of the real flight time is already "used up" by hardware
+  // latency that has nothing to do with network lag or fairness. Shrinking the animation
+  // toward the 120ms floor for that is technically correct lag-comp, but it just looks like
+  // the ball suddenly teleporting at "insane speed" -- so throws FROM the CYD always play at
+  // the full nominal duration instead. The ball still visibly arrives late (nothing fixes
+  // that without speeding up the board's own PUT), it just doesn't also animate unnaturally fast.
+  const fromCyd = t.from === 'cyd';
   const elapsed = duelServerNow() - t.ts;
-  const remaining = Math.max(120, DB_DURATION_MS - elapsed);
+  const remaining = fromCyd ? DB_DURATION_MS : Math.max(120, DB_DURATION_MS - elapsed);
   dbStartFireball(recvDir, realCross, remaining);
   duelIncoming = { active:true, caught:false, belly: t.belly === true };
   dbgLog('duelIncoming: elapsed=' + Math.round(elapsed) + 'ms remaining=' + Math.round(remaining) + 'ms' + (t.belly ? ' [BELLY]' : ''));
