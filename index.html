@@ -527,7 +527,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v30';
+const DUEL_BUILD = 'v31';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -841,7 +841,7 @@ function duelFlash(text){ duelFlashMsg = text; duelFlashUntil = performance.now(
    new case is a SUCCESSFUL belly catch -- see duelBellyResultSource's
    comment below for why that has to flip who takes the "hit".
    ---------------------------------------------------------------------- */
-const DUEL_BELLY_TRIGGER = 2;        // catches needed, per player, before the next throw goes Belly -- test value, tune freely
+const DUEL_BELLY_TRIGGER = 5;        // catches needed, per player, before the next throw goes Belly
 const DUEL_BELLY_COUNTDOWN_MS = 3000;
 const DUEL_BELLY_CATCH_RADIUS = 90;  // px, from the stretch gesture's midpoint -- a bit more forgiving than a tap since there's no visual target to aim at
 let duelMyCatchCount = 0;        // my own successful catches in the current unbroken rally
