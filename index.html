@@ -527,7 +527,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v29';
+const DUEL_BUILD = 'v30';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -1225,17 +1225,31 @@ function duelTryCatch(now, x, y, pointerId){
 function duelReleaseThrow(){
   duelHeld = false; duelHeldPointerId = null;
   if (!fireball) return;
-  const dragDx = fireball.x - duelHeldStartX, dragDy = fireball.y - duelHeldStartY;
-  const dragDist = Math.sqrt(dragDx*dragDx + dragDy*dragDy);
-  let throwBackDir;
-  if (dragDist > 34){
-    const dragHoriz = Math.abs(dragDx) > Math.abs(dragDy);
-    throwBackDir = dragHoriz ? (dragDx>0?'right':'left') : (dragDy>0?'down':'up');
-  } else {
-    throwBackDir = fireball.vx > 0 ? 'left' : fireball.vx < 0 ? 'right'
-                 : fireball.vy > 0 ? 'up' : 'down';
-  }
   const heldX = fireball.x, heldY = fireball.y;
+  let throwBackDir;
+  if (duelBellyActiveThrow){
+    // A belly throw is aimed during a slow, 3-second hold-and-wait (the synced countdown), not a
+    // quick flick -- most players just hold roughly still waiting it out rather than making a big
+    // decisive drag, so measuring direction as drag-distance-from-the-catch-point (like a normal
+    // throw-back) almost always fell under the 34px threshold below and fell back to "bounce back
+    // opposite the way it came" -- every single time, which is exactly why it looked like "always
+    // the same direction no matter which way I throw." Use the ball's actual on-screen position
+    // relative to center instead: wherever you left it sitting when you lifted your finger IS the
+    // direction it throws, which matches what dragging it there during the countdown actually did.
+    const cdx = heldX - W/2, cdy = heldY - H/2;
+    const cHoriz = Math.abs(cdx) > Math.abs(cdy);
+    throwBackDir = cHoriz ? (cdx>0?'right':'left') : (cdy>0?'down':'up');
+  } else {
+    const dragDx = heldX - duelHeldStartX, dragDy = heldY - duelHeldStartY;
+    const dragDist = Math.sqrt(dragDx*dragDx + dragDy*dragDy);
+    if (dragDist > 34){
+      const dragHoriz = Math.abs(dragDx) > Math.abs(dragDy);
+      throwBackDir = dragHoriz ? (dragDx>0?'right':'left') : (dragDy>0?'down':'up');
+    } else {
+      throwBackDir = fireball.vx > 0 ? 'left' : fireball.vx < 0 ? 'right'
+                   : fireball.vy > 0 ? 'up' : 'down';
+    }
+  }
   const pad = 40;
   let distToEdge;
   if (throwBackDir==='left') distToEdge = heldX + pad;
@@ -1300,7 +1314,21 @@ function duelDrawHud(now){
   ctx.textAlign = 'right';
   ctx.fillText('You ' + my, r.left - 10, midY);
   ctx.textAlign = 'left';
+  let labelEndX = r.right + 10 + ctx.measureText('Them ' + their).width;
   ctx.fillText('Them ' + their, r.right + 10, midY);
+  // Small "LIVE" readout, same idea/wording as the CYD board's own connection-state text next to
+  // its room code -- a quick glance confirms the room is actually connected, not just that the
+  // panel says so.
+  ctx.font = `700 11px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = '#ff5a5a';
+  ctx.fillText('LIVE', labelEndX + 10, midY);
+  // Small belly-mode indicator -- a tiny blinking square, not a big screen-wide flash. Sits right
+  // after LIVE so it's easy to spot without being the loud, too-colorful full flash this replaces.
+  if (duelBellyPending){
+    const blinkOn = Math.floor(now/250) % 2 === 0;
+    ctx.fillStyle = blinkOn ? '#ffd04a' : '#8a5a00';
+    ctx.fillRect(labelEndX + 52, midY - 5, 10, 10);
+  }
   if (duelFlashMsg && now < duelFlashUntil){
     ctx.font = `700 18px 'JetBrains Mono', monospace`;
     ctx.fillStyle = '#ffd04a';
@@ -2272,7 +2300,12 @@ function drawInsidesReveal(now, dt){
    ====================================================================== */
 function frame(){
   const now = performance.now();
-  const dt = lastFrameT ? Math.min(100, now - lastFrameT) : 16.7; // clamp a tab-switch/stall spike
+  const dt = lastFrameT ? Math.min(250, now - lastFrameT) : 16.7; // clamp a tab-switch/stall spike --
+  // was 100ms, which under a brief real stall (phone briefly busy/throttled -- common on mobile
+  // Safari) made the fireball visibly under-travel for that gap and look like it "paused near the
+  // edge" before catching back up once frames resumed; 250ms absorbs an ordinary multi-frame hiccup
+  // smoothly while still being far short of DB_LIFETIME_MS (1100ms), so a genuinely long stall (tab
+  // backgrounded) still gets caught by dbMaybeExpire's own wall-clock timeout, not by this cap.
   lastFrameT = now;
 
   ctx.fillStyle = rgbCss(C_BG);
