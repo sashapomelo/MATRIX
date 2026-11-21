@@ -527,7 +527,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v31';
+const DUEL_BUILD = 'v32';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -785,7 +785,11 @@ function dbMaybeExpire(now){
   if (!fireball) return;
   if (duelHeld) return; // a held ball never expires, however long it's carried
   if (now - fireball.startT > DB_LIFETIME_MS ||
-      fireball.x < -60 || fireball.x > W+60 || fireball.y < -60 || fireball.y > H+60){
+      // was a 60px overshoot past each edge before disappearing -- at normal speed that's an extra
+      // ~170ms of travel the ball keeps doing nothing visible for, which read as "stuck/lingering
+      // right at the edge" before it vanished. 20px is enough that it still fully leaves the
+      // visible screen first, without the long hangover.
+      fireball.x < -20 || fireball.x > W+20 || fireball.y < -20 || fireball.y > H+20){
     // An unresolved incoming duel ball that reaches here means it got all the way across
     // without being caught -- that's the actual moment a miss happens, so resolve it right
     // here rather than on a separately-scheduled timer guessing when this would occur.
@@ -1116,6 +1120,17 @@ function duelRenderRoom(){
   if (btn) btn.classList.add('active'); // same highlighted look as 🐉 when armed
 }
 
+// A throw PUT that fails outright (a brief mobile-network hiccup, not a logic bug) used to just
+// vanish -- nothing resent it, so the ball silently never arrived on the other device. One quick
+// retry on failure catches the common transient case without adding a real retry loop/backoff.
+function duelPutThrowBody(url, body){
+  const send = () => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
+  send().catch(e => {
+    dbgLog('throw PUT failed, retrying once: ' + e.message);
+    setTimeout(() => { send().catch(e2 => dbgLog('throw PUT retry also failed -- throw lost: ' + e2.message)); }, 150);
+  });
+}
+
 function duelUpdateHud(){
   const my = duelRole === 'host' ? duelScoreB : duelScoreA;
   const their = duelRole === 'host' ? duelScoreA : duelScoreB;
@@ -1132,14 +1147,10 @@ function duelThrow(dir, crossPos){
   if (!url) return;
   duelLastSeenThrowTs = duelServerNow(); // best local estimate, just for our own echo bookkeeping
   const cross = (dir==='left' || dir==='right') ? crossPos/H : crossPos/W;
-  fetch(url + '/rooms/' + duelRoom + '/throws/current.json', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    // ts is stamped by FIREBASE ITSELF ({".sv":"timestamp"}), not our own clock -- see
-    // duelCalibrateClock's comment. Means the thrower's own clock never enters the equation.
-    body: JSON.stringify({ dir, cross, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} }),
-    cache: 'no-store'
-  }).catch(e=>{ dbgLog('duelThrow PUT threw ' + e.message); });
+  // ts is stamped by FIREBASE ITSELF ({".sv":"timestamp"}), not our own clock -- see
+  // duelCalibrateClock's comment. Means the thrower's own clock never enters the equation.
+  duelPutThrowBody(url + '/rooms/' + duelRoom + '/throws/current.json',
+    { dir, cross, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} });
 }
 
 function duelHandleIncomingThrow(t){
@@ -1273,12 +1284,7 @@ function duelReleaseThrow(){
   // knows to switch this ball over to hole-only catching instead of the normal tap.
   const body = { dir: throwBackDir, cross, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} };
   if (duelBellyActiveThrow) body.belly = true;
-  fetch(url + '/rooms/' + duelRoom + '/throws/current.json', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    cache: 'no-store'
-  }).catch(e=>{ dbgLog('duelReleaseThrow PUT threw ' + e.message); });
+  duelPutThrowBody(url + '/rooms/' + duelRoom + '/throws/current.json', body);
 }
 // Called exactly once, from dbMaybeExpire(), the instant an unresolved incoming ball expires --
 // the caller already flipped duelIncoming.active to false right before calling this, so there's
