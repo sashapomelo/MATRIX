@@ -792,9 +792,13 @@ function dbMaybeExpire(now){
   if (now - fireball.startT > DB_LIFETIME_MS ||
       // was a 60px overshoot past each edge before disappearing -- at normal speed that's an extra
       // ~170ms of travel the ball keeps doing nothing visible for, which read as "stuck/lingering
-      // right at the edge" before it vanished. 20px is enough that it still fully leaves the
-      // visible screen first, without the long hangover.
-      fireball.x < -20 || fireball.x > W+20 || fireball.y < -20 || fireball.y > H+20){
+      // right at the edge" before it vanished. 50px still cuts that down noticeably, but -- unlike
+      // an earlier too-aggressive attempt at this same fix -- stays safely bigger than the 40px
+      // "pad" dbStartFireball() spawns a ball at (W+pad / -pad): with a smaller overshoot than
+      // that pad, a freshly spawned ball was already past this check on its very first frame and
+      // got destroyed before ever being drawn -- it still reached other devices fine (that's a
+      // separate network send), it just never appeared locally. 50 > 40 keeps that from recurring.
+      fireball.x < -50 || fireball.x > W+50 || fireball.y < -50 || fireball.y > H+50){
     // An unresolved incoming duel ball that reaches here means it got all the way across
     // without being caught -- that's the actual moment a miss happens, so resolve it right
     // here rather than on a separately-scheduled timer guessing when this would occur.
