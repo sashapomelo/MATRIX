@@ -464,7 +464,10 @@ function handleSwipe(x,y,now){
     // that edge: for a horizontal swipe the relevant "where" is the finger's current Y, for a
     // vertical swipe it's the current X -- i.e. whatever the CROSS axis is for this swipe.
     const crossPos = swipeHoriz ? y : x;
-    if (duelActive) duelThrow(dir, crossPos); else throwDragonBall(dir, crossPos);
+    // Duel mode: only fires the one idle ball duelServeTick() placed for ME when it's my turn --
+    // see the TURN-BASED SERVING block below. Not my turn (or a ball is already in play) -> this
+    // swipe simply does nothing, same silent no-op as a too-short swipe anywhere else in this file.
+    if (duelActive){ if (duelServeReady) duelServeThrow(dir, crossPos); } else throwDragonBall(dir, crossPos);
   }
 
   if (swipeHoriz === rainHoriz && swipeDir === rainDir){
@@ -532,7 +535,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v34';
+const DUEL_BUILD = 'v35';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -1089,6 +1092,7 @@ function duelDisconnect(){
   duelBellyResetRally();
   duelActive = false;
   duelIncoming.active = false;
+  duelServeReady = false; // next room starts its own fresh serve state, derived from scoreA/scoreB=0
 }
 
 function duelStartHost(){
@@ -1313,6 +1317,57 @@ function duelResolveIncoming(){
   }).catch(e=>{ dbgLog('duelResolveIncoming PUT threw ' + e.message); });
 }
 
+/* ----------------------------------------------------------------------
+   TURN-BASED SERVING -- purely additive. Keeps "one ball in flight at a
+   time, and only the person whose turn it is can start a new one" synced
+   between both devices with NO extra network message of its own: whose
+   turn it is is derived purely from how many total points have been
+   played so far (scoreA+scoreB), which both devices already know from
+   the existing scoreA/scoreB listeners (see duelConnect()). Starting
+   server is always 'host' (an even point total) -- deterministic, so
+   there's nothing to race/agree on before the guest has even joined.
+   This only governs the GAP BETWEEN rallies: once a ball is actually in
+   play, catch-then-throw-back (duelTryCatch/duelReleaseThrow, both
+   unchanged above) already is turn-based on its own -- whoever just
+   caught it is necessarily the only one who can release it next.
+   ---------------------------------------------------------------------- */
+function duelCurrentServer(){
+  return ((duelScoreA + duelScoreB) % 2 === 0) ? 'host' : 'guest';
+}
+function duelIsMyServe(){
+  return duelActive && !!duelRole && duelCurrentServer() === duelRole;
+}
+let duelServeReady = false; // true while MY idle "throw me" ball is sitting on screen, un-thrown
+
+// Called once per frame (from frame(), right alongside dbMaybeExpire()/duelBellyTick()) --
+// the instant it's legitimately my turn and nothing else is in play anywhere in this rally,
+// places an idle, stationary ball at the middle of MY screen for me to swipe-throw. The other
+// player's screen stays empty (their own duelIsMyServe() reads false, so nothing is created
+// there) until I actually throw -- at which point the existing duelThrow()/Firebase relay/
+// duelHandleIncomingThrow path takes over exactly as it already does for a mid-rally throw.
+function duelServeTick(){
+  if (!duelActive) return;
+  if (fireball || duelHeld || duelIncoming.active || duelBellyPending) return; // something's already in play
+  if (duelServeReady) return; // already sitting there, waiting on the swipe
+  if (!duelIsMyServe()) return; // not my turn -- my screen just stays empty until it is
+  duelServeReady = true;
+  fireball = { x: W/2, y: H/2, vx: 0, vy: 0, startT: performance.now(), rot: 0 };
+  dbTrail = []; dbGlyphChars = []; dbGlyphAngles = [];
+  for (let i=0;i<DB_GLYPH_N;i++){
+    dbGlyphChars.push(randGlyph());
+    dbGlyphAngles.push(i/DB_GLYPH_N*Math.PI*2 + (Math.random()-0.5)*0.3);
+  }
+  duelFlash('Your throw -- swipe to fire!');
+}
+
+// Swipe-to-throw, gated to only fire the one idle ball duelServeTick() placed for ME -- replaces
+// the old "a swipe at any moment spawns a brand new ball" behavior, which let either player start
+// an unlimited number of overlapping throws regardless of whose turn it actually was.
+function duelServeThrow(dir, crossPos){
+  duelServeReady = false;
+  duelThrow(dir, crossPos); // existing thrower code, unchanged: local preview + PUT to Firebase
+}
+
 // Flanks the "rain running" status pill at the top instead of drawing dead-center on top of it
 // (where it used to get hidden behind that pill). Reads the pill's own on-screen box each frame
 // so this stays lined up with it at any screen size/orientation.
@@ -1351,6 +1406,16 @@ function duelDrawHud(now){
     ctx.fillText(duelFlashMsg, W/2, r.bottom + 8);
   } else if (duelFlashMsg){
     duelFlashMsg = '';
+  }
+  // Persistent "whose turn" readout -- only needed for the otherwise-ambiguous gap between
+  // rallies (no ball in play for either side); once a ball exists (mine or incoming) it's
+  // already obvious whose turn it effectively is. Skipped while a transient flash message
+  // (same screen position) is still showing, so the two never overlap.
+  if (!(duelFlashMsg && now < duelFlashUntil) && !fireball && !duelBellyPending){
+    ctx.font = `700 13px 'JetBrains Mono', monospace`;
+    ctx.fillStyle = duelIsMyServe() ? '#ffd04a' : 'rgba(200,255,210,0.55)';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(duelIsMyServe() ? 'Your throw -- swipe to fire' : "Waiting for their throw...", W/2, r.bottom + 8);
   }
   ctx.restore();
 }
@@ -2500,6 +2565,7 @@ function frame(){
   drawFireball();
   dbMaybeExpire(now);
   duelBellyTick(now); // no-op unless a belly round is pending -- counts down, then auto-throws
+  duelServeTick(); // no-op unless it's my turn with nothing else in play -- places my idle serve ball
   duelDrawHud(now); // no-op unless a duel is active -- draws over everything else, like the status bar
   requestAnimationFrame(frame);
 }
