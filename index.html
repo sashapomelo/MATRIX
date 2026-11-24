@@ -540,7 +540,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v37';
+const DUEL_BUILD = 'v38';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -901,11 +901,8 @@ function duelBellyTrigger(){
   duelBellyCountdownEndsAt = duelServerNow() + DUEL_BELLY_COUNTDOWN_MS;
   const url = dbFirebaseUrl();
   if (!url || !duelRoom) return;
-  fetch(url + '/rooms/' + duelRoom + '/bellyCountdown.json', {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ start: {'.sv':'timestamp'}, from: DB_CLIENT_ID }),
-    cache: 'no-store'
-  }).catch(e=>{ dbgLog('duelBellyTrigger PUT threw ' + e.message); });
+  duelPutWithRetry(url + '/rooms/' + duelRoom + '/bellyCountdown.json',
+    { start: {'.sv':'timestamp'}, from: DB_CLIENT_ID }, 'bellyCountdown');
 }
 
 // Runs every frame while a belly round is pending -- shows the synced countdown on BOTH screens
@@ -947,11 +944,8 @@ function duelBellyCheckCatch(openDist){
   duelBellyResetRally();
   const url = dbFirebaseUrl();
   if (!url || !duelRoom) return;
-  fetch(url + '/rooms/' + duelRoom + '/bellyResult.json', {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ caught:true, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} }),
-    cache: 'no-store'
-  }).catch(e=>{ dbgLog('duelBellyCheckCatch PUT threw ' + e.message); });
+  duelPutWithRetry(url + '/rooms/' + duelRoom + '/bellyResult.json',
+    { caught:true, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} }, 'bellyResult');
 }
 
 // Lights the opening up in warm orange, like firelight starting to show through the gap --
@@ -1093,11 +1087,7 @@ function duelConnect(){
         if (!r.caught) return;
         duelMyHitsTaken++;
         duelFlash('Belly catch!');
-        const field = duelRole === 'host' ? 'scoreA' : 'scoreB';
-        fetch(url + '/rooms/' + duelRoom + '/' + field + '.json', {
-          method: 'PUT', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify(duelMyHitsTaken), cache: 'no-store'
-        }).catch(e=>{ dbgLog('duelBellyResult score PUT threw ' + e.message); });
+        duelPutScoreField(duelMyHitsTaken);
       } catch(e){ dbgLog('duelBellyResultSource put threw ' + e.message); }
     });
   });
@@ -1150,15 +1140,35 @@ function duelRenderRoom(){
   if (btn) btn.classList.add('active'); // same highlighted look as 🐉 when armed
 }
 
-// A throw PUT that fails outright (a brief mobile-network hiccup, not a logic bug) used to just
-// vanish -- nothing resent it, so the ball silently never arrived on the other device. One quick
-// retry on failure catches the common transient case without adding a real retry loop/backoff.
-function duelPutThrowBody(url, body){
-  const send = () => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
+// Shared "send, and if it didn't actually land, retry once" helper for every write this duel
+// makes to Firebase. A fetch() promise only REJECTS on an outright network failure (a brief
+// mobile-network hiccup, DNS, connection refused) -- it resolves completely normally even when
+// Firebase itself replies with an error STATUS (a malformed body, a security-rule rejection, a
+// momentary 4xx/5xx) -- so checking only .catch() on the bare fetch() silently missed that whole
+// second failure mode: the write looked "sent" from this device's point of view even though
+// Firebase never actually stored it. That's a very plausible explanation for "a throw arrives and
+// technically scores, but the score field never updates, and the next player's ball never
+// appears" -- EVERYTHING downstream of a score write (both devices' scoreA/scoreB listeners, and
+// the whole turn-parity calculation in duelCurrentServer()) depends on that one PUT having
+// actually reached Firebase; if it silently didn't, both sides get stuck on the stale score
+// forever, with nothing to signal that anything went wrong.
+function duelPutWithRetry(url, body, label){
+  const send = () => fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r; });
   send().catch(e => {
-    dbgLog('throw PUT failed, retrying once: ' + e.message);
-    setTimeout(() => { send().catch(e2 => dbgLog('throw PUT retry also failed -- throw lost: ' + e2.message)); }, 150);
+    dbgLog(label + ' PUT failed, retrying once: ' + e.message);
+    setTimeout(() => { send().catch(e2 => dbgLog(label + ' PUT retry also failed -- write lost: ' + e2.message)); }, 150);
   });
+}
+function duelPutThrowBody(url, body){ duelPutWithRetry(url, body, 'throw'); }
+// Writes MY OWN hits-taken count to my scoreA/scoreB slot -- the one thing BOTH devices' whole
+// turn-based serve system (duelCurrentServer()) depends on ever landing in Firebase at all. See
+// duelPutWithRetry()'s comment for why this needed its own retry just as much as a thrown ball did.
+function duelPutScoreField(value){
+  const url = dbFirebaseUrl();
+  if (!url || !duelRoom) return;
+  const field = duelRole === 'host' ? 'scoreA' : 'scoreB';
+  duelPutWithRetry(url + '/rooms/' + duelRoom + '/' + field + '.json', value, 'score');
 }
 
 function duelUpdateHud(){
@@ -1340,15 +1350,7 @@ function duelReleaseThrow(){
 function duelResolveIncoming(){
   duelFlash('Hit!');
   duelMyHitsTaken++;
-  const url = dbFirebaseUrl();
-  if (!url || !duelRoom) return;
-  const field = duelRole === 'host' ? 'scoreA' : 'scoreB';
-  fetch(url + '/rooms/' + duelRoom + '/' + field + '.json', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(duelMyHitsTaken),
-    cache: 'no-store'
-  }).catch(e=>{ dbgLog('duelResolveIncoming PUT threw ' + e.message); });
+  duelPutScoreField(duelMyHitsTaken);
 }
 
 /* ----------------------------------------------------------------------
