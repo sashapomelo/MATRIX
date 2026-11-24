@@ -540,7 +540,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v38';
+const DUEL_BUILD = 'v39';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -1099,6 +1099,7 @@ function duelDisconnect(){
   duelActive = false;
   duelIncoming.active = false;
   duelServeReady = false; // next room starts its own fresh serve state, derived from scoreA/scoreB=0
+  duelLastServeTotal = -1;
   duelHeld = false; duelHeldPointerId = null; duelHeldFromServe = false;
 }
 
@@ -1374,6 +1375,10 @@ function duelIsMyServe(){
   return duelActive && !!duelRole && duelCurrentServer() === duelRole;
 }
 let duelServeReady = false; // true while MY idle "throw me" ball is sitting on screen, un-thrown
+// The (scoreA+scoreB) point-total duelServeTick() last placed -- or already considered and
+// decided NOT to place -- a serve ball for. See duelServeTick()'s comment for why this is
+// essential, not just an optimization.
+let duelLastServeTotal = -1;
 
 // Called once per frame (from frame(), right alongside dbMaybeExpire()/duelBellyTick()) --
 // the instant it's legitimately my turn and nothing else is in play anywhere in this rally,
@@ -1383,11 +1388,36 @@ let duelServeReady = false; // true while MY idle "throw me" ball is sitting on 
 // actually pick this up and throw it -- at which point the existing duelReleaseThrow()/
 // duelThrow()/Firebase-relay/duelHandleIncomingThrow path takes over exactly as it already does
 // for a mid-rally catch-and-throw-back.
+//
+// CRITICAL: "fireball is null right now" is NOT the same thing as "the rally is over" -- it's
+// also true for a split second every single time EITHER player's own copy of the CURRENT ball
+// clears their own screen mid-rally (right after throwing it, before the other side's
+// throw-back has arrived over the network yet). scoreA/scoreB -- and so duelCurrentServer() --
+// only change once an actual point concludes (a miss or a belly result), NOT on every
+// catch-and-throw-back exchange within the same still-ongoing rally. So without this guard,
+// whoever served this point would see their OWN "it's my serve" read true continuously for the
+// entire rally, and every time their own ball happened to clear their screen -- including several
+// throws into a long volley, with the real ball still very much alive on the other device -- they
+// would spuriously get handed a brand new "serve" ball of their own. That second, phantom ball
+// could then go on to silently clobber the real incoming throw the instant it actually arrived
+// (dbStartFireball() just overwrites the shared `fireball` variable), with duelServeReady left
+// stuck true on what had become a real incoming ball -- miscategorizing a legitimate catch as a
+// serve-pickup (no belly-trigger credit) and leaving duelIncoming.active stuck true forever,
+// silently blocking every future incoming throw. That matches every symptom at once: fine for
+// the very first serve of the match, degrading throw direction and belly triggers partway
+// through a rally, and a hard stall once duelIncoming.active got wedged.
+//
+// The fix: only ever place a serve ball ONCE per distinct point-total (scoreA+scoreB) -- i.e.
+// only right after that total actually just changed -- never merely because my own screen
+// happens to be momentarily clear.
 function duelServeTick(){
   if (!duelActive) return;
   if (fireball || duelHeld || duelIncoming.active || duelBellyPending) return; // something's already in play
   if (duelServeReady) return; // already sitting there, waiting to be picked up
-  if (!duelIsMyServe()) return; // not my turn -- my screen just stays empty until it is
+  const total = duelScoreA + duelScoreB;
+  if (total === duelLastServeTotal) return; // already decided (served, or wasn't my turn) for THIS point -- a mid-rally screen-clear, not a new point
+  if (!duelIsMyServe()){ duelLastServeTotal = total; return; } // not my turn this point -- remember so this doesn't re-check every frame; my screen just stays empty until it genuinely changes
+  duelLastServeTotal = total;
   duelServeReady = true;
   fireball = { x: W/2, y: H/2, vx: 0, vy: 0, startT: performance.now(), rot: 0 };
   dbTrail = []; dbGlyphChars = []; dbGlyphAngles = [];
