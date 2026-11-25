@@ -280,6 +280,7 @@
   <h3>Dragon Ball Duel</h3>
   <div id="duelLobby">
     <div class="hint">Throw fireballs at a friend over the web -- whoever doesn't tap in time to block takes the hit. First to 5 wins. Needs the same Firebase relay URL set in Settings.</div>
+    <div class="hint">How to play: when it's your turn, a fireball waits in the middle of your screen -- touch it to pick it up, drag to aim, then let go to throw. Catch several throws in a row and watch for belly mode, a special window to score big.</div>
     <div class="row">
       <button id="duelStartBtn">Start New Duel</button>
     </div>
@@ -873,7 +874,7 @@ function duelFlash(text){ duelFlashMsg = text; duelFlashUntil = performance.now(
    new case is a SUCCESSFUL belly catch -- see duelBellyResultSource's
    comment below for why that has to flip who takes the "hit".
    ---------------------------------------------------------------------- */
-const DUEL_BELLY_TRIGGER = 3;        // catches needed, per player, before the next throw goes Belly
+const DUEL_BELLY_TRIGGER = 5;        // catches needed, per player, before the next throw goes Belly
 const DUEL_BELLY_COUNTDOWN_MS = 3000;
 const DUEL_BELLY_CATCH_RADIUS = 90;  // px, from the stretch gesture's midpoint -- a bit more forgiving than a tap since there's no visual target to aim at
 let duelMyCatchCount = 0;        // my own successful catches in the current unbroken rally
@@ -1252,6 +1253,7 @@ function duelTryCatch(now, x, y, pointerId){
     duelHeld = true; duelHeldPointerId = pointerId; duelHeldFromServe = true;
     fireball.x = x; fireball.y = y;
     duelHeldStartX = x; duelHeldStartY = y; // where duelReleaseThrow() measures the throw drag from
+    duelHintUntil = 0; // dismiss the first-time hint the moment they actually act on it
     duelFlash('Picked up -- throw it!');
     return;
   }
@@ -1379,6 +1381,11 @@ let duelServeReady = false; // true while MY idle "throw me" ball is sitting on 
 // decided NOT to place -- a serve ball for. See duelServeTick()'s comment for why this is
 // essential, not just an optimization.
 let duelLastServeTotal = -1;
+// One-time fading hint shown the very first time a serve ball ever appears for this player in
+// this browser (persisted so it doesn't come back on a later visit either) -- gone the instant
+// they pick the ball up, or after DUEL_HINT_MS either way. Purely cosmetic, never gates anything.
+const DUEL_HINT_MS = 4500;
+let duelHintUntil = 0;
 
 // Called once per frame (from frame(), right alongside dbMaybeExpire()/duelBellyTick()) --
 // the instant it's legitimately my turn and nothing else is in play anywhere in this rally,
@@ -1426,6 +1433,12 @@ function duelServeTick(){
     dbGlyphAngles.push(i/DB_GLYPH_N*Math.PI*2 + (Math.random()-0.5)*0.3);
   }
   duelFlash('Your throw -- pick it up!');
+  // First serve ball this player has EVER seen in this browser -- give them the fading nudge,
+  // then never show it again (this session or any future visit).
+  if (!localStorage.getItem('dragonBall.duelHintSeen')){
+    localStorage.setItem('dragonBall.duelHintSeen', '1');
+    duelHintUntil = performance.now() + DUEL_HINT_MS;
+  }
 }
 
 // Flanks the "rain running" status pill at the top instead of drawing dead-center on top of it
@@ -1477,6 +1490,18 @@ function duelDrawHud(now){
     ctx.fillStyle = duelIsMyServe() ? '#ffd04a' : 'rgba(200,255,210,0.55)';
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText(duelIsMyServe() ? 'Your throw -- pick it up!' : "Waiting for their throw...", W/2, r.bottom + 8);
+  }
+  // One-time fading hint for a brand new player -- see duelServeTick()'s comment on where this
+  // gets armed. Sits just under the ball itself (not down by the score/turn readout, which a
+  // first-timer may not even be looking at yet) and fades out over its last ~800ms instead of
+  // just cutting off.
+  if (now < duelHintUntil){
+    const remain = duelHintUntil - now;
+    const alpha = remain < 800 ? remain/800 : 1;
+    ctx.font = `600 14px 'JetBrains Mono', monospace`;
+    ctx.fillStyle = `rgba(255,208,74,${alpha.toFixed(2)})`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('Touch it, drag to aim, let go to throw', W/2, H/2 + 46);
   }
   ctx.restore();
 }
