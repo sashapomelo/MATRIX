@@ -873,7 +873,7 @@ function duelFlash(text){ duelFlashMsg = text; duelFlashUntil = performance.now(
    new case is a SUCCESSFUL belly catch -- see duelBellyResultSource's
    comment below for why that has to flip who takes the "hit".
    ---------------------------------------------------------------------- */
-const DUEL_BELLY_TRIGGER = 5;        // catches needed, per player, before the next throw goes Belly
+const DUEL_BELLY_TRIGGER = 3;        // catches needed, per player, before the next throw goes Belly
 const DUEL_BELLY_COUNTDOWN_MS = 3000;
 const DUEL_BELLY_CATCH_RADIUS = 90;  // px, from the stretch gesture's midpoint -- a bit more forgiving than a tap since there's no visual target to aim at
 let duelMyCatchCount = 0;        // my own successful catches in the current unbroken rally
