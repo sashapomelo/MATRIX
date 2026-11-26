@@ -310,6 +310,14 @@
       <button id="duelLeaveBtn">Leave Duel</button>
     </div>
   </div>
+  <div id="duelMatchOverView" hidden>
+    <div class="duelScore" id="duelMatchOverText">Match over!</div>
+    <div class="hint">Play again with the same friend, same room -- or leave.</div>
+    <div class="row">
+      <button id="duelRematchBtn">Rematch</button>
+      <button id="duelMatchOverLeaveBtn">Leave Duel</button>
+    </div>
+  </div>
 </div>
 
 <div id="dock">
@@ -541,7 +549,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v39';
+const DUEL_BUILD = 'v41';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -860,6 +868,13 @@ let duelFlashMsg = '', duelFlashUntil = 0;
 
 function duelFlash(text){ duelFlashMsg = text; duelFlashUntil = performance.now() + 1200; }
 
+// Sound/haptic cues were tried here and explicitly didn't land well -- removed. These three
+// names are kept as harmless no-op stubs (rather than deleting every call site below one by
+// one) in case cues are wanted again later in some other form.
+function duelSoundCatch(){}
+function duelSoundMiss(){}
+function duelSoundBelly(){}
+
 /* ----------------------------------------------------------------------
    BELLY MODE (testing) -- once each player has caught DUEL_BELLY_TRIGGER
    times in a row without a miss, the NEXT throw becomes a special round:
@@ -900,6 +915,7 @@ function duelBellyTrigger(){
   duelBellyPending = true;
   duelBellyIAmThrower = true;
   duelBellyCountdownEndsAt = duelServerNow() + DUEL_BELLY_COUNTDOWN_MS;
+  duelSoundBelly();
   const url = dbFirebaseUrl();
   if (!url || !duelRoom) return;
   duelPutWithRetry(url + '/rooms/' + duelRoom + '/bellyCountdown.json',
@@ -941,6 +957,7 @@ function duelBellyCheckCatch(openDist){
   duelIncoming.active = false;
   fireball = null; dbTrail = [];
   duelFlash('Swallowed!');
+  duelSoundCatch();
   duelBellyFlashUntil = performance.now() + DUEL_BELLY_FLASH_MS; // see duelBellyDrawGlow()
   duelBellyResetRally();
   const url = dbFirebaseUrl();
@@ -1019,10 +1036,11 @@ function duelGenRoomCode(){
 }
 function duelRoomUrlFor(code){ return location.origin + location.pathname + '?room=' + code; }
 
-function duelShowView(which){ // 'lobby' | 'joinOffer' | 'room'
+function duelShowView(which){ // 'lobby' | 'joinOffer' | 'room' | 'matchOver'
   document.getElementById('duelLobby').hidden = which !== 'lobby';
   document.getElementById('duelJoinOffer').hidden = which !== 'joinOffer';
   document.getElementById('duelRoomView').hidden = which !== 'room';
+  document.getElementById('duelMatchOverView').hidden = which !== 'matchOver';
 }
 
 function duelConnect(){
@@ -1053,12 +1071,12 @@ function duelConnect(){
       // Any score change means a miss or a belly resolution just happened somewhere -- either
       // way the rally is over, so this is also the one shared, already-synced spot to reset the
       // belly-mode rally counters on BOTH devices (whichever one didn't just set them directly).
-      try { const msg = JSON.parse(ev.data); duelScoreA = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); duelBellyResetRally(); }
+      try { const msg = JSON.parse(ev.data); duelScoreA = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); duelBellyResetRally(); duelSyncMatchOverUI(); }
       catch(e){}
     });
     duelScoreBSource = new EventSource(url + '/rooms/' + duelRoom + '/scoreB.json');
     duelScoreBSource.addEventListener('put', (ev)=>{
-      try { const msg = JSON.parse(ev.data); duelScoreB = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); duelBellyResetRally(); }
+      try { const msg = JSON.parse(ev.data); duelScoreB = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); duelBellyResetRally(); duelSyncMatchOverUI(); }
       catch(e){}
     });
 
@@ -1072,6 +1090,7 @@ function duelConnect(){
         duelBellyPending = true;
         duelBellyIAmThrower = false;
         duelBellyCountdownEndsAt = b.start + DUEL_BELLY_COUNTDOWN_MS;
+        duelSoundBelly(); // the thrower's own side already gets this from duelBellyTrigger() directly
       } catch(e){ dbgLog('duelBellyCountdownSource put threw ' + e.message); }
     });
 
@@ -1101,6 +1120,8 @@ function duelDisconnect(){
   duelIncoming.active = false;
   duelServeReady = false; // next room starts its own fresh serve state, derived from scoreA/scoreB=0
   duelLastServeTotal = -1;
+  duelMatchOverShown = false;
+  document.getElementById('duelPanel').hidden = true; // in case we were leaving FROM the match-over screen
   duelHeld = false; duelHeldPointerId = null; duelHeldFromServe = false;
 }
 
@@ -1125,6 +1146,10 @@ function duelLeave(){
   duelRoom = ''; duelRole = '';
   history.replaceState(null, '', location.pathname);
   duelShowView('lobby');
+  // duelDisconnect() just force-hid the whole #duelPanel (so a match-over screen doesn't linger
+  // on screen after leaving) -- but leaving should land back on the visible lobby, so re-show the
+  // panel itself here, on top of the sub-view switch above.
+  document.getElementById('duelPanel').hidden = false;
   const btn = document.getElementById('duelBtn');
   if (btn) btn.classList.remove('active');
 }
@@ -1178,7 +1203,60 @@ function duelUpdateHud(){
   const their = duelRole === 'host' ? duelScoreA : duelScoreB;
   const el = document.getElementById('duelScoreText');
   if (el) el.textContent = 'You ' + my + ' · Them ' + their;
-  if (my >= DUEL_WIN_SCORE || their >= DUEL_WIN_SCORE) duelFlash(my > their ? 'You win!' : 'You lose');
+  // Match-end itself (and its "You win!/You lose" readout, and the actual stopping of play) is
+  // handled by duelSyncMatchOverUI() now -- see its comment for why a transient duelFlash() here,
+  // re-firing on every single point past the win score forever, wasn't really "the match ending"
+  // at all.
+}
+
+// Deliberately NOT a separately-tracked true/false flag that has to be set and cleared in every
+// right place -- it's just read live off the current score, every single time anything needs to
+// know. A stored flag that drifts out of sync with the actual score (missed a reset somewhere,
+// a DOM update threw partway through, any one of a dozen small timing accidents) can freeze the
+// game invisibly forever with nothing on screen to explain it or recover from it; a value that's
+// always recomputed from the one source of truth (the score) simply cannot get stuck that way.
+function duelIsMatchOver(){
+  return duelScoreA >= DUEL_WIN_SCORE || duelScoreB >= DUEL_WIN_SCORE;
+}
+
+let duelMatchOverShown = false; // ONLY tracks whether the DOM currently reflects duelIsMatchOver() -- never gates gameplay itself, see duelIsMatchOver()
+
+// Keeps duelMatchOverView's visibility (and duelServeTick()'s freeze, via duelIsMatchOver()
+// directly) in sync with the actual score. Called from the scoreA/scoreB listeners AND every
+// frame from duelServeTick() -- cheap (one boolean compare) when nothing changed, and that
+// redundancy means even if a listener callback ever throws or gets missed, the next frame
+// corrects the display within ~16ms rather than leaving it stuck. Wrapped in try/catch so a
+// DOM hiccup here can never be the thing that breaks the rest of the frame.
+function duelSyncMatchOverUI(){
+  try {
+    const over = duelIsMatchOver();
+    if (over === duelMatchOverShown) return;
+    duelMatchOverShown = over;
+    if (over){
+      const my = duelRole === 'host' ? duelScoreB : duelScoreA;
+      const their = duelRole === 'host' ? duelScoreA : duelScoreB;
+      const el = document.getElementById('duelMatchOverText');
+      if (el) el.textContent = (my > their ? 'You win! ' : 'You lose. ') + my + ' - ' + their;
+      document.getElementById('duelPanel').hidden = false;
+      duelShowView('matchOver');
+    } else {
+      // Scores dropped back below the win line -- only happens via duelRematch()'s reset to 0/0.
+      document.getElementById('duelPanel').hidden = true; // back to the canvas, gameplay resumes
+      duelLastServeTotal = -1; // let a fresh serve ball appear for this brand new match
+    }
+  } catch(e){ dbgLog('duelSyncMatchOverUI threw ' + e.message); }
+}
+
+// Either player can hit this -- resets both score fields in Firebase to 0. Both devices'
+// scoreA/scoreB listeners pick up the change and duelSyncMatchOverUI() above unwinds the
+// match-over state on each side independently; there's nothing to negotiate, so it's harmless if
+// both players click it at close to the same time.
+function duelRematch(){
+  const url = dbFirebaseUrl();
+  if (!url || !duelRoom) return;
+  duelMyHitsTaken = 0;
+  duelPutWithRetry(url + '/rooms/' + duelRoom + '/scoreA.json', 0, 'rematch-scoreA');
+  duelPutWithRetry(url + '/rooms/' + duelRoom + '/scoreB.json', 0, 'rematch-scoreB');
 }
 
 // dir/crossPos mean exactly what they mean for solo throwDragonBall() -- same local-preview-first
@@ -1196,6 +1274,7 @@ function duelThrow(dir, crossPos){
 }
 
 function duelHandleIncomingThrow(t){
+  if (duelIsMatchOver()) return; // match already decided -- ignore a throw that was already in flight
   // One ball in flight at a time -- if a throw is already incoming and unresolved, drop this
   // new one rather than overwriting duelIncoming mid-flight (which would corrupt the first
   // throw's own pending resolution). Same "ignore it, don't crash" spirit as everywhere else
@@ -1273,6 +1352,7 @@ function duelTryCatch(now, x, y, pointerId){
   fireball.x = x; fireball.y = y; // snap to the finger immediately, no lag on the catch itself
   duelHeldStartX = x; duelHeldStartY = y; // where duelReleaseThrow() measures the throw-back drag from
   duelFlash('Caught!');
+  duelSoundCatch();
   // Every successful catch counts toward the belly-mode trigger -- once I've caught
   // DUEL_BELLY_TRIGGER times in this unbroken rally, I'm the one holding the ball right now,
   // so I become the thrower for the special round that's about to start.
@@ -1293,11 +1373,12 @@ function duelTryCatch(now, x, y, pointerId){
 // so a vertical catch can come back out horizontal, or any other axis switch. A tap-catch with
 // no real drag (or one too small to be sure it was deliberate) falls back to the old default:
 // straight back the way it came.
-function duelReleaseThrow(){
-  duelHeld = false; duelHeldPointerId = null;
-  if (!fireball) return;
-  const heldX = fireball.x, heldY = fireball.y;
-  let throwBackDir;
+// Shared by duelReleaseThrow() (the real throw) AND the live aim indicator in duelDrawHud() --
+// pulled out specifically so the arrow shown while holding the ball can NEVER disagree with
+// what actually happens on release; they call the exact same function with the exact same
+// inputs. heldX/heldY is the ball's CURRENT on-screen position (wherever the finger is right
+// now); startX/startY is where it was first picked up (duelHeldStartX/Y while actually playing).
+function duelComputeThrowDir(heldX, heldY, startX, startY){
   if (duelBellyActiveThrow){
     // A belly throw is aimed during a slow, 3-second hold-and-wait (the synced countdown), not a
     // quick flick -- most players just hold roughly still waiting it out rather than making a big
@@ -1309,18 +1390,23 @@ function duelReleaseThrow(){
     // direction it throws, which matches what dragging it there during the countdown actually did.
     const cdx = heldX - W/2, cdy = heldY - H/2;
     const cHoriz = Math.abs(cdx) > Math.abs(cdy);
-    throwBackDir = cHoriz ? (cdx>0?'right':'left') : (cdy>0?'down':'up');
-  } else {
-    const dragDx = heldX - duelHeldStartX, dragDy = heldY - duelHeldStartY;
-    const dragDist = Math.sqrt(dragDx*dragDx + dragDy*dragDy);
-    if (dragDist > 34){
-      const dragHoriz = Math.abs(dragDx) > Math.abs(dragDy);
-      throwBackDir = dragHoriz ? (dragDx>0?'right':'left') : (dragDy>0?'down':'up');
-    } else {
-      throwBackDir = fireball.vx > 0 ? 'left' : fireball.vx < 0 ? 'right'
-                   : fireball.vy > 0 ? 'up' : 'down';
-    }
+    return cHoriz ? (cdx>0?'right':'left') : (cdy>0?'down':'up');
   }
+  const dragDx = heldX - startX, dragDy = heldY - startY;
+  const dragDist = Math.sqrt(dragDx*dragDx + dragDy*dragDy);
+  if (dragDist > 34){
+    const dragHoriz = Math.abs(dragDx) > Math.abs(dragDy);
+    return dragHoriz ? (dragDx>0?'right':'left') : (dragDy>0?'down':'up');
+  }
+  return fireball.vx > 0 ? 'left' : fireball.vx < 0 ? 'right'
+       : fireball.vy > 0 ? 'up' : 'down';
+}
+
+function duelReleaseThrow(){
+  duelHeld = false; duelHeldPointerId = null;
+  if (!fireball) return;
+  const heldX = fireball.x, heldY = fireball.y;
+  const throwBackDir = duelComputeThrowDir(heldX, heldY, duelHeldStartX, duelHeldStartY);
   const pad = 40;
   let distToEdge;
   if (throwBackDir==='left') distToEdge = heldX + pad;
@@ -1352,6 +1438,7 @@ function duelReleaseThrow(){
 // reachable from a separately-scheduled timer racing against a catch).
 function duelResolveIncoming(){
   duelFlash('Hit!');
+  duelSoundMiss();
   duelMyHitsTaken++;
   duelPutScoreField(duelMyHitsTaken);
 }
@@ -1419,6 +1506,8 @@ let duelHintUntil = 0;
 // happens to be momentarily clear.
 function duelServeTick(){
   if (!duelActive) return;
+  duelSyncMatchOverUI(); // per-frame redundancy -- self-corrects within ~16ms even if a listener callback was ever missed or threw
+  if (duelIsMatchOver()) return; // match's over -- duelMatchOverView is up, waiting on Rematch/Leave
   if (fireball || duelHeld || duelIncoming.active || duelBellyPending) return; // something's already in play
   if (duelServeReady) return; // already sitting there, waiting to be picked up
   const total = duelScoreA + duelScoreB;
@@ -1502,6 +1591,37 @@ function duelDrawHud(now){
     ctx.fillStyle = `rgba(255,208,74,${alpha.toFixed(2)})`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText('Touch it, drag to aim, let go to throw', W/2, H/2 + 46);
+  }
+  // Live aim indicator, while a ball is actually held -- calls the EXACT same
+  // duelComputeThrowDir() that duelReleaseThrow() itself uses on release, with the exact same
+  // inputs, so this can never show one direction and then throw a different one. Draws a short
+  // arrow from the ball toward whichever edge it would currently fly off of -- since the throw
+  // logic only ever picks one of the 4 cardinal directions (never a free angle), the arrow only
+  // ever points straight up/down/left/right too, which is exactly what a player needs to see to
+  // catch "it's about to go sideways" BEFORE letting go, instead of only finding out after.
+  if (duelHeld && fireball){
+    const dir = duelComputeThrowDir(fireball.x, fireball.y, duelHeldStartX, duelHeldStartY);
+    const len = 46, headLen = 11;
+    let ax = 0, ay = 0;
+    if (dir === 'left') ax = -len; else if (dir === 'right') ax = len;
+    else if (dir === 'up') ay = -len; else ay = len;
+    const tipX = fireball.x + ax, tipY = fireball.y + ay;
+    const angle = Math.atan2(ay, ax);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,208,74,0.9)';
+    ctx.fillStyle = 'rgba(255,208,74,0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(fireball.x, fireball.y);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX - headLen*Math.cos(angle-Math.PI/6), tipY - headLen*Math.sin(angle-Math.PI/6));
+    ctx.lineTo(tipX - headLen*Math.cos(angle+Math.PI/6), tipY - headLen*Math.sin(angle+Math.PI/6));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
   ctx.restore();
 }
@@ -2774,6 +2894,8 @@ document.getElementById('duelCodeInput').addEventListener('keydown', (e)=>{
   if (e.key === 'Enter') document.getElementById('duelCodeJoinBtn').dispatchEvent(new Event('pointerdown', {bubbles:true}));
 });
 document.getElementById('duelLeaveBtn').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); duelLeave(); });
+document.getElementById('duelRematchBtn').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); duelRematch(); });
+document.getElementById('duelMatchOverLeaveBtn').addEventListener('pointerdown', (e)=>{ e.stopPropagation(); duelLeave(); });
 document.getElementById('duelCopyBtn').addEventListener('pointerdown', (e)=>{
   e.stopPropagation();
   const input = document.getElementById('duelLinkOut');
