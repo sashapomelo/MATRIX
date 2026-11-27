@@ -549,7 +549,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v42';
+const DUEL_BUILD = 'v43';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -848,7 +848,7 @@ function dbMaybeExpire(now){
 let duelActive = false;
 let duelRoom = '';
 let duelRole = ''; // 'host' | 'guest'
-let duelThrowSource = null, duelScoreASource = null, duelScoreBSource = null, duelMatchResetSource = null;
+let duelThrowSource = null, duelScoreASource = null, duelScoreBSource = null;
 let duelLastSeenThrowTs = 0; // own-echo suppression, room-scoped (separate from solo dbLastSeenTs)
 let duelScoreA = 0, duelScoreB = 0; // hitsTaken by host / by guest, synced from Firebase
 let duelMyHitsTaken = 0;           // my own running count -- only I ever write my own slot
@@ -1058,9 +1058,19 @@ function duelConnect(){
         const msg = JSON.parse(ev.data);
         const t = msg && msg.data;
         if (!t || typeof t !== 'object') return;
-        if (t.from === DB_CLIENT_ID) return; // ignore our own throw coming back
+        if (t.from === DB_CLIENT_ID) return; // ignore our own write coming back
         if (!t.ts || t.ts <= duelLastSeenThrowTs) return;
         duelLastSeenThrowTs = t.ts;
+        if (t.reset){
+          // Rematch's atomic reset signal, piggybacked onto this already-open throws channel
+          // (see duelRematch()'s comment for why this rides the existing connection instead of
+          // opening a dedicated one) -- reset both local score variables together in one step
+          // before anything re-derives "whose serve"/"is the match over" from them.
+          duelScoreA = 0; duelScoreB = 0; duelMyHitsTaken = 0;
+          duelUpdateHud(); duelBellyResetRally(); duelSyncMatchOverUI();
+          duelPutScoreField(0);
+          return;
+        }
         duelHandleIncomingThrow(t);
       } catch(e){ dbgLog('duelThrowSource put threw ' + e.message); }
     });
@@ -1080,28 +1090,6 @@ function duelConnect(){
       catch(e){}
     });
 
-    // Rematch used to just PUT scoreA.json and scoreB.json straight to 0 -- two SEPARATE network
-    // writes, delivered to the two listeners above as two SEPARATE events, possibly seconds apart
-    // or in either order. In between them, duelScoreA+duelScoreB briefly held one fresh 0 and one
-    // stale pre-rematch number -- computing a nonsense "whose serve"/"is the match over" answer
-    // off that half-reset total, which is exactly what caused the second-match corruption (ball
-    // appearing on both screens, score not registering, or the new match ending after a couple of
-    // misses). Rematch now broadcasts ONE atomic signal instead, and both devices reset BOTH local
-    // score variables to 0 together, in a single synchronous step, before anything re-derives from
-    // them -- see the listener below.
-    duelMatchResetSource = new EventSource(url + '/rooms/' + duelRoom + '/matchReset.json');
-    duelMatchResetSource.addEventListener('put', (ev)=>{
-      try {
-        const msg = JSON.parse(ev.data);
-        if (!msg || !msg.data) return; // null on first subscribe (room's brand new) -- not an actual reset
-        duelScoreA = 0; duelScoreB = 0; duelMyHitsTaken = 0;
-        duelUpdateHud(); duelBellyResetRally(); duelSyncMatchOverUI();
-        // Push my own persistent score field back to 0 too, now that local state is already
-        // consistent -- if the old scoreA/scoreB listeners above also fire for this (same value,
-        // already applied), it's a harmless no-op rather than a fresh race.
-        duelPutScoreField(0);
-      } catch(e){ dbgLog('duelMatchResetSource put threw ' + e.message); }
-    });
 
     // Synced belly-mode countdown -- only the THROWER ever writes this, so any device that
     // receives it (and it isn't its own echo) is necessarily this round's catcher.
@@ -1136,8 +1124,8 @@ function duelConnect(){
   });
 }
 function duelDisconnect(){
-  [duelThrowSource, duelScoreASource, duelScoreBSource, duelMatchResetSource, duelBellyCountdownSource, duelBellyResultSource].forEach(es=>{ if (es) try{ es.close(); }catch(e){} });
-  duelThrowSource = duelScoreASource = duelScoreBSource = duelMatchResetSource = duelBellyCountdownSource = duelBellyResultSource = null;
+  [duelThrowSource, duelScoreASource, duelScoreBSource, duelBellyCountdownSource, duelBellyResultSource].forEach(es=>{ if (es) try{ es.close(); }catch(e){} });
+  duelThrowSource = duelScoreASource = duelScoreBSource = duelBellyCountdownSource = duelBellyResultSource = null;
   duelBellyResetRally();
   duelActive = false;
   duelIncoming.active = false;
@@ -1270,18 +1258,30 @@ function duelSyncMatchOverUI(){
   } catch(e){ dbgLog('duelSyncMatchOverUI threw ' + e.message); }
 }
 
-// Either player can hit this. Sends ONE atomic matchReset broadcast rather than resetting
-// scoreA.json/scoreB.json directly (see duelMatchResetSource's comment in duelConnect() for why
-// two separate field-writes raced each other across a match reset) -- both devices' listener for
-// that broadcast resets duelScoreA/duelScoreB to 0 together in one step, and duelSyncMatchOverUI()
-// above unwinds the match-over state on each side independently from there. There's nothing to
-// negotiate, so it's harmless if both players click it at close to the same time -- whichever
-// broadcast a device sees first just re-triggers the same already-applied reset.
+// Either player can hit this. Used to just PUT scoreA.json and scoreB.json straight to 0 -- two
+// SEPARATE network writes, delivered to the two score listeners as two SEPARATE events, possibly
+// arriving seconds apart or in either order on each device. In between them, duelScoreA+duelScoreB
+// briefly held one fresh 0 and one stale pre-rematch number -- computing a nonsense "whose
+// serve"/"is the match over" answer off that half-reset total, which is exactly what caused the
+// second-match corruption (ball appearing on both screens, score not registering, or the new
+// match ending after a couple of misses).
+//
+// Fixed by sending ONE atomic reset signal instead, piggybacked onto the throws/current.json
+// channel that's already open (rather than opening a brand new persistent connection just for
+// this -- six-plus simultaneous EventSource connections to one host is already pushing most
+// browsers' per-host connection limit, and tipping over it is what made v42 stall EVERY throw,
+// not just rematch's). I apply the reset to my own local state immediately (same as any other
+// locally-initiated action elsewhere in this file -- no need to wait on my own write to round
+// -trip back), and the other device's duelThrowSource listener applies the same reset, atomically,
+// the moment its 'reset' flag arrives -- see that listener's comment.
 function duelRematch(){
   const url = dbFirebaseUrl();
   if (!url || !duelRoom) return;
-  duelPutWithRetry(url + '/rooms/' + duelRoom + '/matchReset.json',
-    { at: {'.sv':'timestamp'}, from: DB_CLIENT_ID }, 'matchReset');
+  duelScoreA = 0; duelScoreB = 0; duelMyHitsTaken = 0;
+  duelUpdateHud(); duelBellyResetRally(); duelSyncMatchOverUI();
+  duelPutThrowBody(url + '/rooms/' + duelRoom + '/throws/current.json',
+    { reset: true, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} });
+  duelPutScoreField(0);
 }
 
 // dir/crossPos mean exactly what they mean for solo throwDragonBall() -- same local-preview-first
