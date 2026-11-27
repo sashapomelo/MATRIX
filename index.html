@@ -364,14 +364,6 @@ function resize(){
   // line up after a rotation, which is what was making it jump to a wrong spot for a moment.
   // Simplest safe fix: just clear it on resize rather than try to reflow it mid-animation.
   msg = null;
-  // A duel serve ball that hasn't been picked up yet was centered on the OLD W/H -- rotating the
-  // device before the first throw left it sitting wherever the old center used to be, often off
-  // past the edge of the new orientation and impossible to reach. Only the still-idle serve-ball
-  // case gets recentered here; anything already held or actually in flight is left alone, same
-  // "don't reflow mid-animation" spirit as clearing msg above.
-  if (duelServeReady && fireball && !duelHeld){
-    fireball.x = W/2; fireball.y = H/2;
-  }
 }
 window.addEventListener('resize', resize);
 
@@ -557,7 +549,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v44';
+const DUEL_BUILD = 'v43';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
@@ -1079,19 +1071,6 @@ function duelConnect(){
           duelPutScoreField(0);
           return;
         }
-        if (t.join){
-          // The guest's one-time "I'm actually here" announcement -- same piggyback-on-the-
-          // existing-channel reasoning as the reset signal above, rather than a dedicated
-          // connection just for this. Only the host is ever waiting on it (the guest already
-          // knows the host exists, having joined with its room code), but it's harmless either
-          // way if both sides happen to receive it.
-          if (!duelPeerConnected){
-            duelPeerConnected = true;
-            duelPeerConnectedAt = performance.now();
-            duelFlash('Player connected!');
-          }
-          return;
-        }
         duelHandleIncomingThrow(t);
       } catch(e){ dbgLog('duelThrowSource put threw ' + e.message); }
     });
@@ -1110,17 +1089,6 @@ function duelConnect(){
       try { const msg = JSON.parse(ev.data); duelScoreB = (typeof msg.data === 'number') ? msg.data : 0; duelUpdateHud(); duelBellyResetRally(); duelSyncMatchOverUI(); }
       catch(e){}
     });
-
-    if (duelRole === 'guest'){
-      // Joining with a valid room code already implies the host exists -- no need to wait on
-      // anything before trusting that myself. Still send the announcement so the HOST's own
-      // duelPeerConnected flips true too (see its declaration comment for why the host can't
-      // place its first serve ball without this).
-      duelPeerConnected = true;
-      duelPeerConnectedAt = performance.now();
-      duelPutThrowBody(url + '/rooms/' + duelRoom + '/throws/current.json',
-        { join: true, from: DB_CLIENT_ID, ts: {'.sv':'timestamp'} });
-    }
 
 
     // Synced belly-mode countdown -- only the THROWER ever writes this, so any device that
@@ -1164,7 +1132,6 @@ function duelDisconnect(){
   duelServeReady = false; // next room starts its own fresh serve state, derived from scoreA/scoreB=0
   duelLastServeTotal = -1;
   duelMatchOverShown = false;
-  duelPeerConnected = false; duelPeerConnectedAt = 0; // next room needs its own fresh "is anyone else here" check
   document.getElementById('duelPanel').hidden = true; // in case we were leaving FROM the match-over screen
   duelHeld = false; duelHeldPointerId = null; duelHeldFromServe = false;
 }
@@ -1522,15 +1489,6 @@ function duelIsMyServe(){
   return duelActive && !!duelRole && duelCurrentServer() === duelRole;
 }
 let duelServeReady = false; // true while MY idle "throw me" ball is sitting on screen, un-thrown
-// True once this device has confirmed someone else is actually in the room. The host used to be
-// able to throw the very first serve ball before any guest had joined at all -- that throw had
-// nowhere to go, leaving the host stuck forever waiting on a reply that could never arrive. Until
-// this flips true, duelServeTick() refuses to place a serve ball at all, no matter whose turn the
-// score math says it is. Guest sets this for itself the moment it joins (joining with a valid
-// room code already implies the host exists); host only flips it on actually hearing from the
-// guest -- see the 'join' handling on duelThrowSource in duelConnect().
-let duelPeerConnected = false;
-let duelPeerConnectedAt = 0; // performance.now() timestamp of the moment above flipped true
 // The (scoreA+scoreB) point-total duelServeTick() last placed -- or already considered and
 // decided NOT to place -- a serve ball for. See duelServeTick()'s comment for why this is
 // essential, not just an optimization.
@@ -1575,8 +1533,6 @@ function duelServeTick(){
   if (!duelActive) return;
   duelSyncMatchOverUI(); // per-frame redundancy -- self-corrects within ~16ms even if a listener callback was ever missed or threw
   if (duelIsMatchOver()) return; // match's over -- duelMatchOverView is up, waiting on Rematch/Leave
-  if (!duelPeerConnected) return; // no one else in the room yet -- see duelPeerConnected's declaration comment
-  if (performance.now() - duelPeerConnectedAt < 1000) return; // brief beat so "Player connected!" is actually seen before the ball shows up
   if (fireball || duelHeld || duelIncoming.active || duelBellyPending) return; // something's already in play
   if (duelServeReady) return; // already sitting there, waiting to be picked up
   const total = duelScoreA + duelScoreB;
@@ -1608,25 +1564,15 @@ function duelDrawHud(now){
   const r = statusEl.getBoundingClientRect();
   const midY = r.top + r.height/2;
   ctx.font = `700 13px 'JetBrains Mono', monospace`;
+  ctx.fillStyle = 'rgba(200,255,210,0.9)';
   ctx.textBaseline = 'middle';
   const my = duelRole === 'host' ? duelScoreB : duelScoreA;
   const their = duelRole === 'host' ? duelScoreA : duelScoreB;
-  // "You"/"Them" drawn a half-step brighter (the same amber used for flashes/hints elsewhere)
-  // than the plain score numbers (the existing dim green) -- just enough of a visual anchor for
-  // "whose count is whose" at a glance, reusing colors already in the palette.
+  ctx.textAlign = 'right';
+  ctx.fillText('You ' + my, r.left - 10, midY);
   ctx.textAlign = 'left';
-  const youWordW = ctx.measureText('You ').width;
-  const youX = (r.left - 10) - (youWordW + ctx.measureText(String(my)).width);
-  ctx.fillStyle = '#ffd04a';
-  ctx.fillText('You ', youX, midY);
-  ctx.fillStyle = 'rgba(200,255,210,0.9)';
-  ctx.fillText(String(my), youX + youWordW, midY);
-  const themWordW = ctx.measureText('Them ').width;
-  ctx.fillStyle = '#ffd04a';
-  ctx.fillText('Them ', r.right + 10, midY);
-  ctx.fillStyle = 'rgba(200,255,210,0.9)';
-  ctx.fillText(String(their), r.right + 10 + themWordW, midY);
   let labelEndX = r.right + 10 + ctx.measureText('Them ' + their).width;
+  ctx.fillText('Them ' + their, r.right + 10, midY);
   // Small "LIVE" readout, same idea/wording as the CYD board's own connection-state text next to
   // its room code -- a quick glance confirms the room is actually connected, not just that the
   // panel says so.
@@ -1655,17 +1601,9 @@ function duelDrawHud(now){
   // so the two never overlap.
   if (!(duelFlashMsg && now < duelFlashUntil) && !duelHeld && !duelIncoming.active && !duelBellyPending){
     ctx.font = `700 13px 'JetBrains Mono', monospace`;
+    ctx.fillStyle = duelIsMyServe() ? '#ffd04a' : 'rgba(200,255,210,0.55)';
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    if (!duelPeerConnected){
-      // Nobody else here yet -- a blinking terminal-cursor-style line rather than a static one,
-      // so it reads as "still waiting" rather than looking stalled or broken.
-      const blinkOn = Math.floor(now/500) % 2 === 0;
-      ctx.fillStyle = blinkOn ? '#ffd04a' : 'rgba(255,208,74,0.35)';
-      ctx.fillText('No player connected...', W/2, r.bottom + 8);
-    } else {
-      ctx.fillStyle = duelIsMyServe() ? '#ffd04a' : 'rgba(200,255,210,0.55)';
-      ctx.fillText(duelIsMyServe() ? 'Your throw -- pick it up!' : "Waiting for their throw...", W/2, r.bottom + 8);
-    }
+    ctx.fillText(duelIsMyServe() ? 'Your throw -- pick it up!' : "Waiting for their throw...", W/2, r.bottom + 8);
   }
   // One-time fading hint for a brand new player -- see duelServeTick()'s comment on where this
   // gets armed. Sits just under the ball itself (not down by the score/turn readout, which a
