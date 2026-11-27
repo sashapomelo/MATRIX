@@ -369,11 +369,19 @@ function resize(){
   // past the edge of the new orientation and impossible to reach. Only the still-idle serve-ball
   // case gets recentered here; anything already held or actually in flight is left alone, same
   // "don't reflow mid-animation" spirit as clearing msg above.
-  if (duelServeReady && fireball && !duelHeld){
+  if (typeof duelServeReady !== 'undefined' && duelServeReady && fireball && !duelHeld){
     fireball.x = W/2; fireball.y = H/2;
   }
 }
 window.addEventListener('resize', resize);
+// iOS Safari sometimes fires 'resize' (and 'orientationchange') with a still-transitional
+// innerWidth/innerHeight the instant the device finishes rotating -- before its own address-bar/
+// chrome animation has actually settled -- which is a documented cause of fixed-position UI
+// (like the bottom dock here) ending up laid out against a stale viewport size until something
+// else nudges a reflow. This doesn't change anything about the resize() logic itself, just gives
+// it one more corrective pass a moment later once the chrome has actually finished moving, purely
+// additive on top of the existing immediate call above.
+window.addEventListener('orientationchange', ()=>{ setTimeout(resize, 400); });
 
 /* ======================================================================
    GLYPH ALPHABET -- half-width katakana + digits, the classic rain set
@@ -557,7 +565,7 @@ function dbFirebaseUrl(){
 // showing "MISSED TIMING" log lines, a message that had already been deleted from the source two
 // versions earlier. Safari had simply served a cached copy of the old page instead of fetching the
 // new one. Check this tag first whenever behavior doesn't match the current code.
-const DUEL_BUILD = 'v44';
+const DUEL_BUILD = 'v46';
 console.log('[matrix-duel] build ' + DUEL_BUILD);
 document.title = 'Talking to the Matrix (' + DUEL_BUILD + ')';
 // One random id per page load/tab, so a device never reacts to the throw it just sent itself
